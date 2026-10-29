@@ -47,10 +47,35 @@ export function duracao(ms: number) {
   return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`
 }
 
+const comparavel = (p: string) => p.replaceAll('/', '\\').replace(/\\+$/, '').toLowerCase()
+
 export function mesmaPasta(a?: string | null, b?: string | null) {
   if (!a || !b) return false
-  const n = (p: string) => p.replaceAll('/', '\\').replace(/\\+$/, '').toLowerCase()
-  return n(a) === n(b)
+  return comparavel(a) === comparavel(b)
+}
+
+/** `pasta` é `base` ou fica dentro dela. */
+export function estaDentro(pasta: string, base: string) {
+  const p = comparavel(pasta)
+  const b = comparavel(base)
+  return p === b || p.startsWith(`${b}\\`)
+}
+
+const umaCasa = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 })
+
+/** Bytes → "412 MB", "1,8 GB" (de 1024 em 1024, como o Gerenciador de Tarefas). */
+export function formatarMemoria(bytes: number) {
+  const mb = bytes / 1024 ** 2
+  if (mb < 1) return `${Math.round(bytes / 1024)} KB`
+  // Até 999 MB; dali para cima, em GB (nada de "1000 MB").
+  if (Math.round(mb) < 1000) return `${Math.round(mb)} MB`
+  return `${umaCasa.format(mb / 1024)} GB`
+}
+
+/** A CPU, em porcentagem da máquina: "0,4%", "3,2%", "12%". */
+export function formatarCpu(porcentagem: number) {
+  if (porcentagem >= 10) return `${Math.round(porcentagem)}%`
+  return `${umaCasa.format(Math.max(0, porcentagem))}%`
 }
 
 /** O caminho como o Windows escreve: barras invertidas, sem a do fim. */

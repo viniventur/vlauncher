@@ -6,7 +6,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { Effect, getCurrentWindow } from '@tauri-apps/api/window'
 import { ask, open } from '@tauri-apps/plugin-dialog'
-import type { Config, Execucao, Linha, Locais, Pedido, Projeto, Tema } from './tipos'
+import type { Amostra, Config, Execucao, Linha, Locais, OndeEsta, Pedido, PedidoDoCanal, Projeto, RespostaDoCanal, Tema } from './tipos'
 
 export const dentroDoTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
@@ -30,6 +30,8 @@ export interface Api {
   limparLinhas(id: string): Promise<void>
 
   listarLocais(pasta: string): Promise<Locais>
+  /** Em que worktree a pasta está (null: fora de um repositório). */
+  ondeEsta(pasta: string): Promise<OndeEsta | null>
   buscarBranches(pasta: string): Promise<void>
   criarWorktree(repositorio: string, branch: string, remota: boolean, pastaBase?: string): Promise<string>
   trocarBranch(pasta: string, branch: string, remota: boolean): Promise<void>
@@ -51,6 +53,15 @@ export interface Api {
   definirDesfoqueDaJanela(acrylic: boolean): Promise<void>
   /** Mantém o acrylic com a janela sem foco (o Windows o trocaria por uma cor sólida). */
   manterVidroAtivo(ligado: boolean): Promise<void>
+  /** Traz a janela (escondida na bandeja, por exemplo). */
+  mostrarJanela(): Promise<void>
+
+  /** A resposta a um pedido do `vl`. */
+  responderCanal(id: number, resposta: RespostaDoCanal): Promise<void>
+  /** A interface já atende o `vl`: os pedidos que esperavam chegam agora. */
+  canalPronto(): Promise<void>
+  aoPedirPeloCanal(cb: (pedido: PedidoDoCanal) => void): Promise<UnlistenFn>
+  aoAmostrar(cb: (amostra: Amostra) => void): Promise<UnlistenFn>
 
   aoMudarExecucao(cb: (e: Execucao) => void): Promise<UnlistenFn>
   aoChegarLinhas(cb: (id: string, linhas: Linha[]) => void): Promise<UnlistenFn>
@@ -84,6 +95,7 @@ const tauri: Api = {
   limparLinhas: (id) => invoke('limpar_linhas', { id }),
 
   listarLocais: (pasta) => invoke('listar_locais', { pasta }),
+  ondeEsta: (pasta) => invoke('onde_esta', { pasta }),
   buscarBranches: (pasta) => invoke('buscar_branches', { pasta }),
   criarWorktree: (repositorio, branch, remota, pastaBase) =>
     invoke('criar_worktree', { repositorio, branch, remota, pastaBase: pastaBase ?? null }),
@@ -115,6 +127,12 @@ const tauri: Api = {
   definirDesfoqueDaJanela: (acrylic) =>
     acrylic ? getCurrentWindow().setEffects({ effects: [Effect.Acrylic] }) : getCurrentWindow().clearEffects(),
   manterVidroAtivo: (ligado) => invoke('manter_vidro_ativo', { ligado }),
+  mostrarJanela: () => invoke('mostrar_janela'),
+
+  responderCanal: (id, resposta) => invoke('responder_canal', { id, resposta }),
+  canalPronto: () => invoke('canal_pronto'),
+  aoPedirPeloCanal: (cb) => listen<PedidoDoCanal>('canal:pedido', (e) => cb(e.payload)),
+  aoAmostrar: (cb) => listen<Amostra>('monitor:amostra', (e) => cb(e.payload)),
 
   aoMudarExecucao: (cb) => listen<Execucao>('execucao:estado', (e) => cb(e.payload)),
   aoChegarLinhas: (cb) => listen<{ id: string; linhas: Linha[] }>('execucao:linhas', (e) => cb(e.payload.id, e.payload.linhas)),

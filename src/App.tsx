@@ -7,12 +7,15 @@ import { DialogoGrupo } from './components/DialogoGrupo'
 import { DialogoImportar } from './components/DialogoImportar'
 import { FundoLiquido } from './components/FundoLiquido'
 import { Galeria } from './components/Galeria'
+import { Monitor } from './components/Monitor'
 import { Painel } from './components/Painel'
 import { Topo } from './components/Topo'
 import { Vazio } from './components/Vazio'
 import { api } from './lib/api'
+import { conectarCanal } from './lib/canal'
 import { useConfig } from './lib/config'
 import { useExecucoes } from './lib/execucoes'
+import { useMonitor } from './lib/monitor'
 import { ouvirImagensSoltas } from './lib/soltarImagem'
 import { useUi } from './lib/ui'
 import { TRANSPARENCIA_PADRAO, transparenciaPeloAtalho } from './lib/vidro'
@@ -29,8 +32,11 @@ export function App() {
   const buscaAberta = useUi((s) => s.buscaAberta)
 
   useEffect(() => {
-    useConfig.getState().carregar()
-    useExecucoes.getState().conectar()
+    // O `vl` só é atendido depois que os apps e as execuções chegam: um pedido que esperava (o vl
+    // rodar que abriu o launcher) acharia a lista vazia.
+    Promise.all([useConfig.getState().carregar(), useExecucoes.getState().conectar(), useMonitor.getState().conectar()])
+      .then(conectarCanal)
+      .catch((e) => console.error('o launcher não terminou de carregar', e))
     ouvirImagensSoltas()
     api.aoAbrirBusca(() => useUi.getState().abrirBusca(true))
 
@@ -92,6 +98,7 @@ export function App() {
         {temGrupos ? <Galeria /> : <Vazio />}
       </main>
       <Painel />
+      <Monitor />
 
       {dialogo?.tipo === 'grupo' && <DialogoGrupo id={dialogo.id} pasta={dialogo.pasta} depoisImportar={dialogo.depoisImportar} />}
       {dialogo?.tipo === 'app' && <DialogoApp id={dialogo.id} grupoId={dialogo.grupoId} pasta={dialogo.pasta} />}

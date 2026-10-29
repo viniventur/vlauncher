@@ -48,6 +48,9 @@ pub struct Pedido {
     pub url: Option<String>,
     #[serde(default)]
     pub abrir_quando_pronto: bool,
+    /// Quem pediu, quando não foi a interface: "vl" (a linha de comando, src/bin/vl.rs).
+    #[serde(default)]
+    pub origem: Option<String>,
 }
 
 #[derive(Clone, Copy, Serialize, PartialEq)]
@@ -76,6 +79,7 @@ pub struct Execucao {
     /// Quem parou foi a pessoa: o código de saída (o do taskkill) não é erro do app.
     pub parada: bool,
     pub url: Option<String>,
+    pub origem: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -179,6 +183,7 @@ fn iniciar(app: &AppHandle, pedido: Pedido) -> Result<Execucao, String> {
         estado: Estado::Rodando,
         parada: false,
         url: if url_fixa { pedido.url.clone() } else { None },
+        origem: pedido.origem.clone(),
     };
     let id = execucao.id.clone();
 
@@ -327,6 +332,16 @@ pub fn rodando(app: &AppHandle) -> usize {
     let estado = app.state::<Execucoes>();
     let mapa = estado.0.lock().unwrap();
     mapa.values().filter(|r| r.execucao.estado != Estado::Encerrada).count()
+}
+
+/// O processo de cada execução que ainda não encerrou (o monitor mede a árvore dele).
+pub fn raizes_rodando(app: &AppHandle) -> Vec<(String, u32)> {
+    let estado = app.state::<Execucoes>();
+    let mapa = estado.0.lock().unwrap();
+    mapa.values()
+        .filter(|r| r.execucao.estado != Estado::Encerrada)
+        .map(|r| (r.execucao.id.clone(), r.execucao.pid))
+        .collect()
 }
 
 /// O que está rodando, uma linha por execução ("• loja-online · dev:all (main)"), para a

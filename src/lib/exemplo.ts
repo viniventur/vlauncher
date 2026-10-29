@@ -2,12 +2,14 @@
 // do Vite. Não entra no app instalado (o api.ts só importa este arquivo fora do Tauri).
 
 import type { Api } from './api'
-import type { Config, Execucao, Linha, Locais, Projeto, Worktree } from './tipos'
+import type { Amostra, Config, Execucao, Linha, Locais, PedidoDoCanal, Projeto, Worktree } from './tipos'
 
 const ouvintes = {
   estado: new Set<(e: Execucao) => void>(),
   linhas: new Set<(id: string, l: Linha[]) => void>(),
   removida: new Set<(id: string) => void>(),
+  amostra: new Set<(a: Amostra) => void>(),
+  canal: new Set<(p: PedidoDoCanal) => void>(),
 }
 const execucoes = new Map<string, { e: Execucao; linhas: Linha[]; timer?: number }>()
 const imagens = new Map<string, string>()
@@ -125,6 +127,7 @@ function iniciar(pedido: Parameters<Api['iniciarExecucao']>[0]): Execucao {
     estado: 'rodando',
     parada: false,
     url: pedido.url,
+    origem: pedido.origem ?? null,
   }
   const registro: { e: Execucao; linhas: Linha[]; timer?: number } = { e, linhas: [] }
   execucoes.set(e.id, registro)
@@ -142,6 +145,56 @@ function iniciar(pedido: Parameters<Api['iniciarExecucao']>[0]): Execucao {
   }, 450)
   return e
 }
+
+// O monitor de mentira: de 2 em 2 s, uma CPU e uma memória que passeiam para cada execução rodando.
+const passeio = new Map<string, { cpu: number; memoria: number }>()
+let havia = false
+window.setInterval(() => {
+  const rodando = [...execucoes.values()].filter((r) => r.e.estado !== 'encerrada')
+  if (rodando.length === 0 && !havia) return
+  havia = rodando.length > 0
+  const mb = 1024 ** 2
+  const amostra: Amostra = {
+    instante: Date.now(),
+    nucleos: 16,
+    cpuMaquina: 18 + Math.random() * 14,
+    memoriaUsada: 9.8 * 1024 * mb,
+    memoriaTotal: 16 * 1024 * mb,
+    execucoes: rodando.map(({ e }) => {
+      const antes = passeio.get(e.id) ?? { cpu: 9, memoria: 280 * mb }
+      const agora = {
+        cpu: Math.min(40, Math.max(0.2, antes.cpu * 0.7 + Math.random() * 5 + (Math.random() < 0.08 ? 18 : 0))),
+        memoria: Math.max(120 * mb, antes.memoria + (Math.random() - 0.4) * 12 * mb),
+      }
+      passeio.set(e.id, agora)
+      const vite = agora.memoria * 0.62
+      return {
+        id: e.id,
+        cpu: agora.cpu,
+        memoria: agora.memoria,
+        portas: e.rotulo.includes('all') ? [3001, 8080] : [5173],
+        quantos: 6,
+        processos: [
+          { pid: e.pid + 4, nome: 'node.exe', cpu: agora.cpu * 0.7, memoria: vite },
+          { pid: e.pid + 9, nome: 'node.exe', cpu: agora.cpu * 0.2, memoria: agora.memoria * 0.24 },
+          { pid: e.pid + 12, nome: 'esbuild.exe', cpu: agora.cpu * 0.1, memoria: agora.memoria * 0.09 },
+          { pid: e.pid + 1, nome: 'node.exe', cpu: 0, memoria: agora.memoria * 0.03 },
+          { pid: e.pid, nome: 'cmd.exe', cpu: 0, memoria: agora.memoria * 0.01 },
+          { pid: e.pid + 2, nome: 'conhost.exe', cpu: 0, memoria: agora.memoria * 0.01 },
+        ],
+      }
+    }),
+  }
+  for (const cb of ouvintes.amostra) cb(amostra)
+}, 2000)
+
+// No console do navegador, o que o `vl` faria: vl('status'), vl('rodar', { app: 'loja' }).
+let proximoPedido = 1
+Object.assign(window, {
+  vl: (comando: string, args: PedidoDoCanal['args'] = {}, pasta: string | null = null) => {
+    for (const cb of ouvintes.canal) cb({ id: proximoPedido++, comando, args, pasta })
+  },
+})
 
 export const exemplo: Api = {
   caminhoDados: async () => 'C:\\Users\\voce\\AppData\\Roaming\\br.com.viniciusventura.launcher',
@@ -181,8 +234,8 @@ export const exemplo: Api = {
     window.clearInterval(r.timer)
     execucoes.delete(id)
     for (const cb of ouvintes.removida) cb(id)
-    const { appId, variacaoId, rotulo, local, pasta, comando, url } = r.e
-    return iniciar({ appId, variacaoId, rotulo, local, pasta, comando, url, env: [], abrirQuandoPronto: false })
+    const { appId, variacaoId, rotulo, local, pasta, comando, url, origem } = r.e
+    return iniciar({ appId, variacaoId, rotulo, local, pasta, comando, url, env: [], abrirQuandoPronto: false, origem })
   },
   async descartarExecucao(id) {
     window.clearInterval(execucoes.get(id)?.timer)
@@ -216,6 +269,7 @@ export const exemplo: Api = {
       ],
     }
   },
+  ondeEsta: async () => null,
   buscarBranches: async () => new Promise((r) => setTimeout(r, 800)),
   criarWorktree: async (repositorio, branch) => `${repositorio}\\.claude\\worktrees\\${branch.replace(/^origin\//, '').replaceAll('/', '-')}`,
   trocarBranch: async () => undefined,
@@ -258,6 +312,12 @@ export const exemplo: Api = {
   definirTemaDaJanela: async () => undefined,
   definirDesfoqueDaJanela: async () => undefined,
   manterVidroAtivo: async () => undefined,
+  mostrarJanela: async () => undefined,
+
+  responderCanal: async (id, resposta) => console.info(`[exemplo] vl #${id}`, resposta.ok ? 'ok' : 'falhou', `\n${resposta.erro ?? ''}${resposta.texto ?? ''}`),
+  canalPronto: async () => undefined,
+  aoPedirPeloCanal: async (cb) => ouvir(ouvintes.canal, cb),
+  aoAmostrar: async (cb) => ouvir(ouvintes.amostra, cb),
 
   aoMudarExecucao: async (cb) => ouvir(ouvintes.estado, cb),
   aoChegarLinhas: async (cb) => ouvir(ouvintes.linhas, cb),

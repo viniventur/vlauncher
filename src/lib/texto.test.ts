@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { caminhoWindows, combina, escreverEnv, iniciais, lerEnv, mesmaPasta, relativoA, urlCurta } from './texto'
+import {
+  caminhoWindows,
+  combina,
+  escreverEnv,
+  estaDentro,
+  formatarCpu,
+  formatarMemoria,
+  iniciais,
+  lerEnv,
+  mesmaPasta,
+  relativoA,
+  urlCurta,
+} from './texto'
 
 describe('texto', () => {
   it('busca sem acento e em qualquer ordem', () => {
@@ -23,6 +35,20 @@ describe('texto', () => {
   it('compara pastas do Windows', () => {
     expect(mesmaPasta('D:/projetos/app/', 'd:\\Projetos\\app')).toBe(true)
     expect(relativoA('D:\\proj\\app\\.claude\\worktrees\\x', 'D:/proj/app')).toBe('.claude\\worktrees\\x')
+    expect(estaDentro('d:/proj/app/src', 'D:\\proj\\app\\')).toBe(true)
+    expect(estaDentro('D:\\proj\\app', 'D:\\proj\\app')).toBe(true)
+    // Começar com o mesmo nome não é estar dentro.
+    expect(estaDentro('D:\\proj\\app-admin', 'D:\\proj\\app')).toBe(false)
+  })
+
+  it('escreve a memória e a CPU como o Gerenciador de Tarefas', () => {
+    expect(formatarMemoria(412.4 * 1024 ** 2)).toBe('412 MB')
+    expect(formatarMemoria(1.84 * 1024 ** 3)).toBe('1,8 GB')
+    expect(formatarMemoria(999.6 * 1024 ** 2)).toBe('1 GB')
+    expect(formatarMemoria(300 * 1024)).toBe('300 KB')
+    expect(formatarCpu(0.04)).toBe('0%')
+    expect(formatarCpu(3.24)).toBe('3,2%')
+    expect(formatarCpu(12.6)).toBe('13%')
   })
 
   it('lê e escreve as variáveis de ambiente', () => {

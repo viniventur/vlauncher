@@ -3,7 +3,7 @@
 // A busca (Ctrl+K no launcher, Ctrl+Alt+Espaço de qualquer lugar): digitar parte do nome e Enter
 // para rodar a variação, abrir o painel, abrir o endereço ou parar o que está rodando.
 
-import { ChevronsDownUp, ChevronsUpDown, Droplet, ExternalLink, LayoutPanelLeft, Play, Search, Square } from 'lucide-react'
+import { Activity, ChevronsDownUp, ChevronsUpDown, Droplet, ExternalLink, LayoutPanelLeft, Play, Search, Square } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api } from '../lib/api'
 import { avisarErro } from '../lib/avisos'
@@ -66,6 +66,14 @@ export function Busca() {
             },
           ]
         : []
+    const monitor: Item = {
+      chave: 'monitor',
+      icone: <Activity />,
+      titulo: 'Abrir o monitor',
+      detalhe: quantasRodando > 0 ? `a CPU e a memória das ${quantasRodando === 1 ? '1 execução' : `${quantasRodando} execuções`}` : 'a CPU e a memória do que estiver rodando',
+      busca: ['monitor', 'cpu', 'memória', 'processos', 'portas', 'desempenho', 'painel'],
+      acao: () => useUi.getState().abrirMonitor(true),
+    }
     const aparencia: Item[] = [
       {
         chave: 'vidro',
@@ -132,7 +140,7 @@ export function Busca() {
         ]
       }),
     )
-    return [...pararTodas, ...rodando, ...doLauncher, ...recolher, ...aparencia].filter((i) => combina(texto, ...i.busca)).slice(0, 60)
+    return [...pararTodas, ...rodando, ...doLauncher, monitor, ...recolher, ...aparencia].filter((i) => combina(texto, ...i.busca)).slice(0, 60)
   }, [grupos, execucoes, texto, vidro, abrirApp, escolherAba])
 
   useEffect(() => {

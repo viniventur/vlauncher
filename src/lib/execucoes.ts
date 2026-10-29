@@ -2,10 +2,12 @@
 
 import { create } from 'zustand'
 import { api } from './api'
+import { localDoApp, pastaDoApp } from './apps'
 import { avisar, avisarErro } from './avisos'
 import { useConfig } from './config'
-import { nomeDaPasta } from './texto'
-import type { App, Execucao, Linha, Variacao } from './tipos'
+import type { App, Execucao, Linha, Pedido, Variacao } from './tipos'
+
+export { localDoApp, pastaDoApp, variacaoPadrao } from './apps'
 
 const MAX_LINHAS = 3000
 
@@ -23,10 +25,26 @@ interface EstadoExecucoes {
   limpar(id: string): Promise<void>
 }
 
-export const pastaDoApp = (app: App) => app.pastaAtual ?? app.pasta
-export const localDoApp = (app: App) => app.localAtual ?? (app.pastaAtual ? nomeDaPasta(app.pastaAtual) : 'pasta principal')
-export const variacaoPadrao = (app: App) => app.variacoes.find((v) => v.id === app.variacaoPadrao) ?? app.variacoes[0]
 export const estaAtiva = (e: Execucao) => e.estado !== 'encerrada'
+
+/**
+ * O pedido ao Rust para rodar a variação: na pasta escolhida em "Onde rodar" ou, com `onde`, noutra
+ * worktree do app. `origem` diz quem pediu quando não foi a interface ("vl").
+ */
+export function pedidoDaVariacao(app: App, variacao: Variacao, onde?: { pasta: string; local: string }, origem: string | null = null): Pedido {
+  return {
+    appId: app.id,
+    variacaoId: variacao.id,
+    rotulo: variacao.nome,
+    local: onde?.local ?? localDoApp(app),
+    pasta: onde?.pasta ?? pastaDoApp(app),
+    comando: variacao.comando,
+    env: variacao.env,
+    url: variacao.url?.trim() || null,
+    abrirQuandoPronto: variacao.abrirQuandoPronto,
+    origem,
+  }
+}
 
 let conectado = false
 
@@ -42,20 +60,9 @@ export const useExecucoes = create<EstadoExecucoes>()((set, get) => {
       return { execucoes, linhas }
     })
 
-  async function iniciar(app: App, rotulo: string, comando: string, extra: Partial<Parameters<typeof api.iniciarExecucao>[0]>) {
+  async function iniciar(pedido: Pedido) {
     try {
-      const e = await api.iniciarExecucao({
-        appId: app.id,
-        variacaoId: null,
-        rotulo,
-        local: localDoApp(app),
-        pasta: pastaDoApp(app),
-        comando,
-        env: [],
-        url: null,
-        abrirQuandoPronto: false,
-        ...extra,
-      })
+      const e = await api.iniciarExecucao(pedido)
       guardarSeNova(e)
       return e
     } catch (erro) {
@@ -95,16 +102,21 @@ export const useExecucoes = create<EstadoExecucoes>()((set, get) => {
         }
         return null
       }
-      return iniciar(app, variacao.nome, variacao.comando, {
-        variacaoId: variacao.id,
-        env: variacao.env,
-        url: variacao.url?.trim() || null,
-        abrirQuandoPronto: variacao.abrirQuandoPronto,
-      })
+      return iniciar(pedidoDaVariacao(app, variacao))
     },
 
     rodarComando: (app, rotulo, comando, pasta, local) =>
-      iniciar(app, rotulo, comando, { ...(pasta && { pasta }), ...(local && { local }) }),
+      iniciar({
+        appId: app.id,
+        variacaoId: null,
+        rotulo,
+        local: local || localDoApp(app),
+        pasta: pasta || pastaDoApp(app),
+        comando,
+        env: [],
+        url: null,
+        abrirQuandoPronto: false,
+      }),
 
     async parar(id) {
       await api.pararExecucao(id).catch(avisarErro)

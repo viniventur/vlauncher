@@ -230,6 +230,38 @@ pub async fn listar_locais(pasta: String) -> Result<Locais, String> {
     tauri::async_runtime::spawn_blocking(move || listar(&pasta)).await.map_err(|e| e.to_string())?
 }
 
+/// Em que repositório e em que worktree uma pasta está.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OndeEsta {
+    /// A raiz da pasta principal do repositório (a primeira worktree).
+    pub raiz_principal: String,
+    /// A raiz da worktree em que a pasta está (a própria principal, se for ela).
+    pub raiz: String,
+    pub branch: Option<String>,
+    pub head: String,
+}
+
+fn onde_esta_a_pasta(pasta: &str) -> Option<OndeEsta> {
+    let raiz = normalizar(git(pasta, &["rev-parse", "--show-toplevel"]).ok()?.trim());
+    let porcelana = git(pasta, &["worktree", "list", "--porcelain"]).ok()?;
+    let lidas = ler_worktrees(&porcelana.replace("\r\n", "\n"));
+    let raiz_principal = lidas.first()?.0.clone();
+    let atual = lidas.into_iter().find(|w| w.0.eq_ignore_ascii_case(&raiz));
+    Some(OndeEsta {
+        raiz_principal,
+        raiz,
+        branch: atual.as_ref().and_then(|w| w.1.clone()),
+        head: atual.map(|w| w.2).unwrap_or_default(),
+    })
+}
+
+/// Para o `vl`: a pasta de onde ele foi chamado está em que worktree (None: fora de um repositório).
+#[tauri::command]
+pub async fn onde_esta(pasta: String) -> Result<Option<OndeEsta>, String> {
+    tauri::async_runtime::spawn_blocking(move || onde_esta_a_pasta(&pasta)).await.map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn buscar_branches(pasta: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || git(&pasta, &["fetch", "--all", "--prune"]).map(|_| ()))

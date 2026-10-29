@@ -17,6 +17,18 @@ pub fn mostrar(app: &AppHandle) {
     }
 }
 
+/// O `vl abrir`: traz a janela (a interface já abriu o painel do app).
+#[tauri::command]
+pub fn mostrar_janela(app: AppHandle) {
+    mostrar(&app);
+}
+
+/// Aberto pelo `vl` (`--na-bandeja`), o launcher começa só na bandeja: quem pediu foi o terminal, e a
+/// janela não rouba o foco de ninguém.
+pub fn comecar_na_bandeja(args: &[String]) -> bool {
+    args.iter().any(|a| a == "--na-bandeja")
+}
+
 /// O atalho global: traz o launcher com a busca aberta, ou esconde se ele já estiver na frente.
 pub fn alternar(app: &AppHandle) {
     let Some(janela) = app.get_webview_window(JANELA) else { return };
@@ -30,14 +42,14 @@ pub fn alternar(app: &AppHandle) {
 }
 
 pub fn criar_bandeja(app: &AppHandle) -> tauri::Result<()> {
-    let mostrar_item = MenuItem::with_id(app, "mostrar", "Mostrar o launcher", true, None::<&str>)?;
+    let mostrar_item = MenuItem::with_id(app, "mostrar", "Mostrar o vlauncher", true, None::<&str>)?;
     let parar = MenuItem::with_id(app, "parar", "Parar todos os apps", true, None::<&str>)?;
     let separador = PredefinedMenuItem::separator(app)?;
     let sair = MenuItem::with_id(app, "sair", "Encerrar os apps e sair", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&mostrar_item, &parar, &separador, &sair])?;
 
     let mut construtor = TrayIconBuilder::with_id(BANDEJA)
-        .tooltip("Launcher")
+        .tooltip("vlauncher")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, evento| match evento.id.as_ref() {
@@ -95,9 +107,9 @@ fn confirmar_parar_todas(app: &AppHandle) {
 pub fn atualizar_bandeja(app: &AppHandle) {
     let n = crate::processos::rodando(app);
     let texto = match n {
-        0 => "Launcher".to_string(),
-        1 => "Launcher: 1 app rodando".to_string(),
-        n => format!("Launcher: {n} apps rodando"),
+        0 => "vlauncher".to_string(),
+        1 => "vlauncher: 1 app rodando".to_string(),
+        n => format!("vlauncher: {n} apps rodando"),
     };
     if let Some(bandeja) = app.tray_by_id(BANDEJA) {
         let _ = bandeja.set_tooltip(Some(texto));

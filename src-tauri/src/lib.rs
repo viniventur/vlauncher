@@ -1,8 +1,11 @@
+mod canal;
 mod dados;
 mod git;
 mod janela;
+mod monitor;
 mod processos;
 mod projetos;
+mod protocolo;
 mod sistema;
 mod vidro;
 
@@ -17,17 +20,24 @@ pub fn run() {
             std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", pasta.join("webview"));
         }
     }
+    let args: Vec<String> = std::env::args().collect();
+    let na_bandeja = janela::comecar_na_bandeja(&args);
 
     let construtor = tauri::Builder::default();
-    // No instalado, abrir o launcher de novo só traz a janela que já está aberta. No `pnpm app`, não:
-    // o de desenvolvimento precisa rodar ao lado do instalado.
+    // No instalado, abrir o launcher de novo só traz a janela que já está aberta (a não ser que quem
+    // abriu tenha sido o `vl`). No `pnpm app`, não: o de desenvolvimento roda ao lado do instalado.
     #[cfg(not(debug_assertions))]
-    let construtor = construtor.plugin(tauri_plugin_single_instance::init(|app, _, _| janela::mostrar(app)));
+    let construtor = construtor.plugin(tauri_plugin_single_instance::init(|app, args, _| {
+        if !janela::comecar_na_bandeja(&args) {
+            janela::mostrar(app)
+        }
+    }));
     construtor
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(processos::Execucoes::default())
-        .setup(|app| {
+        .manage(canal::Canal::default())
+        .setup(move |app| {
             // As fotos de uma pasta de teste (LAUNCHER_DADOS) também passam pelo protocolo asset.
             if let Some(pasta) = dados::pasta_de_teste() {
                 app.asset_protocol_scope().allow_directory(pasta.join("imagens"), true)?;
@@ -36,7 +46,13 @@ pub fn run() {
             registrar_atalho(app.handle());
             if let Some(principal) = app.get_webview_window("principal") {
                 vidro::instalar(&principal);
+                // A janela nasce escondida (tauri.conf.json) para poder começar só na bandeja.
+                if !na_bandeja {
+                    principal.show()?;
+                }
             }
+            monitor::iniciar(app.handle().clone());
+            canal::iniciar(app.handle().clone());
             Ok(())
         })
         .on_window_event(|janela, evento| {
@@ -65,6 +81,7 @@ pub fn run() {
             processos::linhas_da_execucao,
             processos::limpar_linhas,
             git::listar_locais,
+            git::onde_esta,
             git::buscar_branches,
             git::criar_worktree,
             git::trocar_branch,
@@ -76,10 +93,13 @@ pub fn run() {
             sistema::abrir_vscode,
             sistema::abrir_terminal,
             sistema::abrir_claude,
+            janela::mostrar_janela,
+            canal::responder_canal,
+            canal::canal_pronto,
             vidro::manter_vidro_ativo,
         ])
         .build(tauri::generate_context!())
-        .expect("erro ao iniciar o launcher")
+        .expect("erro ao iniciar o vlauncher")
         .run(|app, evento| {
             if let RunEvent::Exit = evento {
                 processos::encerrar_todas(app);

@@ -22,7 +22,8 @@ import { api } from '../lib/api'
 import { avisar, avisarErro } from '../lib/avisos'
 import { acharApp, useConfig } from '../lib/config'
 import { estaAtiva, pastaDoApp, useExecucoes, useExecucoesDoApp, variacaoPadrao } from '../lib/execucoes'
-import { duracao, mesmaPasta, urlCurta } from '../lib/texto'
+import { useMonitor } from '../lib/monitor'
+import { duracao, formatarCpu, formatarMemoria, mesmaPasta, urlCurta } from '../lib/texto'
 import { contasDoClaude, corDaConta } from '../lib/claude'
 import type { App, Execucao, Grupo } from '../lib/tipos'
 import { useUi } from '../lib/ui'
@@ -226,6 +227,7 @@ function Execucoes({ app, execucoes }: { app: App; execucoes: Execucao[] }) {
 
   const atual = execucoes.find((e) => e.id === abaEscolhida) ?? execucoes[0]!
   const ativa = estaAtiva(atual)
+  const uso = useMonitor((s) => s.uso[atual.id])
 
   // O relógio da duração anda enquanto roda.
   useEffect(() => {
@@ -273,7 +275,21 @@ function Execucoes({ app, execucoes }: { app: App; execucoes: Execucao[] }) {
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pb-2.5">
         <p className="min-w-0 flex-1 truncate text-legenda text-texto-3" title={`${atual.comando} em ${atual.pasta}`}>
-          <span className={ativa ? 'text-destaque' : falhou ? 'text-erro' : ''}>{estado}</span> · {atual.pasta}
+          <span className={ativa ? 'text-destaque' : falhou ? 'text-erro' : ''}>{estado}</span>
+          {ativa && uso && (
+            <>
+              {' · '}
+              <button
+                className="underline-offset-[0.2em] hover:text-texto hover:underline"
+                onClick={() => useUi.getState().abrirMonitor(true)}
+                title="Abrir o monitor"
+              >
+                CPU {formatarCpu(uso.cpu)} · {formatarMemoria(uso.memoria)}
+                {uso.portas.length > 0 && ` · ${uso.portas.length === 1 ? 'porta' : 'portas'} ${uso.portas.join(', ')}`}
+              </button>
+            </>
+          )}
+          {atual.origem === 'vl' && <span className="italic"> · pelo vl</span>} · {atual.pasta}
         </p>
         {ativa && atual.url && (
           <button className="botao pequeno" onClick={() => api.abrirUrl(atual.url!).catch(avisarErro)}>

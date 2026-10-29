@@ -89,6 +89,8 @@ export interface Execucao {
   /** Quem parou foi a pessoa (o código de saída, então, não é erro do app). */
   parada: boolean
   url: string | null
+  /** Quem pediu, quando não foi a interface: "vl" (a linha de comando). */
+  origem: string | null
 }
 
 export interface Linha {
@@ -107,6 +109,71 @@ export interface Pedido {
   env: [string, string][]
   url: string | null
   abrirQuandoPronto: boolean
+  origem?: string | null
+}
+
+/** Um processo da árvore de uma execução, na última amostra do monitor (src-tauri/src/monitor.rs). */
+export interface ProcessoMedido {
+  pid: number
+  nome: string
+  /** Porcentagem da máquina inteira (todos os núcleos), como no Gerenciador de Tarefas. */
+  cpu: number
+  /** Bytes do conjunto de trabalho privado. */
+  memoria: number
+}
+
+/** Quanto uma execução pesa: a soma da árvore de processos dela. */
+export interface Uso {
+  id: string
+  cpu: number
+  memoria: number
+  portas: number[]
+  /** Quantos processos ela tem (a lista traz só os que mais pesam). */
+  quantos: number
+  processos: ProcessoMedido[]
+}
+
+/** Uma amostra do monitor, de 2 em 2 s enquanto algo roda. */
+export interface Amostra {
+  /** Milissegundos desde 1970. */
+  instante: number
+  nucleos: number
+  cpuMaquina: number
+  memoriaUsada: number
+  memoriaTotal: number
+  execucoes: Uso[]
+}
+
+/** O que o `vl` pede (src-tauri/src/canal.rs). O app e a variação vêm pelo nome, nunca um comando. */
+export interface PedidoDoCanal {
+  id: number
+  comando: string
+  args: {
+    app?: string
+    variacao?: string
+    /** A branch (ou a pasta) da worktree em que rodar. */
+    local?: string
+    linhas?: number
+    todas?: boolean
+    esperar?: boolean
+  }
+  /** A pasta de onde o `vl` foi chamado. */
+  pasta?: string | null
+}
+
+export interface RespostaDoCanal {
+  ok: boolean
+  texto?: string
+  erro?: string
+  dados?: unknown
+}
+
+/** Em que repositório e worktree uma pasta está (para o `vl`). */
+export interface OndeEsta {
+  raizPrincipal: string
+  raiz: string
+  branch: string | null
+  head: string
 }
 
 export interface Worktree {
