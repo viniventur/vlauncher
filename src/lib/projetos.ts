@@ -1,4 +1,5 @@
-// Das sugestões que o Rust achou no package.json para as variações de um app novo.
+// Das sugestões que o Rust achou no projeto (package.json, pyproject, compose) para as variações de um
+// app novo.
 
 import { novoId } from './ids'
 import type { Projeto, Sugestao, Variacao } from './tipos'

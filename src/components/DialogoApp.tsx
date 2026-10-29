@@ -1,4 +1,4 @@
-// Criar ou editar um app: a pasta (o launcher lê o package.json e sugere as variações), nome, grupo,
+// Criar ou editar um app: a pasta (o launcher lê o projeto e sugere as variações), nome, grupo,
 // foto e as variações (o comando, o endereço fixo, as variáveis de ambiente e onde rodar).
 
 import { ChevronDown, FolderOpen, Plus, Star, Trash2 } from 'lucide-react'
@@ -61,7 +61,7 @@ export function DialogoApp({ id, grupoId: grupoInicial, pasta: pastaDoGrupo }: P
     }
   }
 
-  // Editando: lê a pasta só para oferecer os outros scripts do package.json.
+  // Editando: lê a pasta só para oferecer as outras sugestões do projeto.
   useEffect(() => {
     if (app) ler(app.pasta, false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -215,7 +215,7 @@ export function DialogoApp({ id, grupoId: grupoInicial, pasta: pastaDoGrupo }: P
             <button type="button" className="botao-2 pequeno" onClick={() => adicionar()}>
               <Plus className="size-3.5" /> Variação
             </button>
-            {sugestoes.length > 0 && <span className="ml-2 text-legenda text-texto-3">Do package.json:</span>}
+            {sugestoes.length > 0 && <span className="ml-2 text-legenda text-texto-3">Do projeto:</span>}
             {sugestoes.slice(0, 14).map((s) => (
               <button
                 key={s.comando}
