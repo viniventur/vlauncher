@@ -59,6 +59,8 @@ const configInicial: Config = {
           ],
         },
       ],
+      // O front da loja e a API de pagamentos, em repositórios separados: a API sobe primeiro.
+      subgrupos: [{ id: 's1', nome: 'loja', apps: ['a2', 'a1'] }],
     },
     {
       id: 'g2',
@@ -102,6 +104,21 @@ const SAIDA_DO_VITE = [
   '[0]   ➜  Network: http://192.168.0.12:8080/',
 ]
 
+// A API de pagamentos (a2) tem a saída dela, e o resto imita o Vite.
+const SAIDAS: Record<string, { inicio: string[]; batida: () => string; portas: number[] }> = {
+  a2: {
+    inicio: ['> api-pagamentos@2.3.0 dev', '> tsx watch src/servidor.ts', 'migrações em dia (42)', 'API de pagamentos em http://localhost:4000'],
+    batida: () => `POST /pagamentos/pix 201 em ${(Math.random() * 60 + 20).toFixed(0)} ms`,
+    portas: [4000],
+  },
+}
+const saidaDoVite = (rotulo: string) => ({
+  inicio: SAIDA_DO_VITE,
+  batida: () => `[1] [api] GET /api/saude 200 em ${(Math.random() * 40).toFixed(0)} ms`,
+  portas: rotulo.includes('all') ? [3001, 8080] : [5173],
+})
+const saidaDe = (e: Pick<Execucao, 'appId' | 'rotulo'>) => SAIDAS[e.appId] ?? saidaDoVite(e.rotulo)
+
 function ouvir<T>(conjunto: Set<T>, cb: T) {
   conjunto.add(cb)
   return () => void conjunto.delete(cb)
@@ -131,15 +148,18 @@ function iniciar(pedido: Parameters<Api['iniciarExecucao']>[0]): Execucao {
   }
   const registro: { e: Execucao; linhas: Linha[]; timer?: number } = { e, linhas: [] }
   execucoes.set(e.id, registro)
+  const saida = saidaDe(e)
   let i = 0
   registro.timer = window.setInterval(() => {
-    const texto = i < SAIDA_DO_VITE.length ? SAIDA_DO_VITE[i]! : `[1] [api] GET /api/saude 200 em ${(Math.random() * 40).toFixed(0)} ms`
+    const texto = i < saida.inicio.length ? saida.inicio[i]! : saida.batida()
     const linha: Linha = { n: i, texto, erro: i === 2 && pedido.rotulo.includes('staging') }
     i++
     registro.linhas.push(linha)
     for (const cb of ouvintes.linhas) cb(e.id, [linha])
-    if (!e.url && texto.includes('Local:')) {
-      e.url = 'http://localhost:8080/'
+    // O endereço do app: o "Local:" do Vite, ou o da API.
+    const endereco = /(?:Local:|pagamentos em)\s+(http:\/\/localhost:\d+\/?)/.exec(texto)?.[1]
+    if (!e.url && endereco) {
+      e.url = endereco
       emitir(e)
     }
   }, 450)
@@ -173,7 +193,7 @@ window.setInterval(() => {
         id: e.id,
         cpu: agora.cpu,
         memoria: agora.memoria,
-        portas: e.rotulo.includes('all') ? [3001, 8080] : [5173],
+        portas: saidaDe(e).portas,
         quantos: 6,
         processos: [
           { pid: e.pid + 4, nome: 'node.exe', cpu: agora.cpu * 0.7, memoria: vite },

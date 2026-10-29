@@ -24,7 +24,7 @@ sem caçar terminal nem porta presa.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/galeria-escuro.webp">
-  <img src="docs/galeria-claro.webp" alt="A galeria do vlauncher: os apps em dois grupos, cada um com a sua foto, um deles rodando">
+  <img src="docs/galeria-claro.webp" alt="A galeria do vlauncher: os apps em dois grupos, cada um com a sua foto, e o subgrupo da loja rodando">
 </picture>
 
 <p align="center">
@@ -42,7 +42,8 @@ sem caçar terminal nem porta presa.
 
 vlauncher is a Windows desktop app to organize and run the projects you work on. Group your apps,
 define how each one runs (`npm run dev:all`, `docker compose up`...), pick the branch or git worktree
-before running, follow the output in place and watch each app's CPU, memory and ports. The bundled
+before running, bundle a front end and its API from separate repositories into a subgroup that runs
+together, follow the output in place and watch each app's CPU, memory and ports. The bundled
 `vl` command line drives it from any terminal, so a dev server started by Claude Code (through the
 included skill) shows up in the launcher too. Built with Tauri 2, Rust and React; the interface is in
 Brazilian Portuguese. [Download the latest installer](../../releases/latest).
@@ -104,9 +105,19 @@ encerra a árvore inteira de processos (o `npm`, o `node`, o `vite`): a porta fi
 Escolha a pasta antes de rodar: a principal ou qualquer worktree. Uma branch sem worktree ganha uma num
 clique, já com os arquivos que o git não leva (`.env*`, `.npmrc`). O vlauncher avisa quando falta o
 `node_modules` e instala com o gerenciador do projeto (npm, pnpm, yarn ou bun). Num monorepo, o app roda
-na mesma subpasta de cada worktree.
+na mesma subpasta de cada worktree. As pastas em que o app está rodando ganham o ponto ciano.
 
 ![O seletor de onde rodar, com as worktrees e as branches sem worktree](docs/onde-rodar.webp)
+
+### O sistema inteiro, num clique
+
+O front e a API costumam morar em repositórios separados. Junte os dois num **subgrupo**: na galeria,
+eles viram um cartão só, como uma pasta do iPhone, e o painel dele mostra cada app com a sua worktree e
+a saída de todos. **Rodar tudo** sobe cada um com a variação escolhida, a API antes do front, cada um na
+sua pasta: a loja na worktree da feature, a API na principal. Crie em "Novo subgrupo", no menu do grupo;
+o vlauncher sugere os repositórios que moram na mesma pasta.
+
+![O painel de um subgrupo: a API e a loja rodando, cada uma na sua worktree, com a saída das duas](docs/subgrupo.webp)
 
 ### Quanto cada app pesa
 
@@ -124,8 +135,9 @@ aparece no vlauncher como qualquer outro. Com a skill que o acompanha, o Claude 
 servidores por ele. Veja [No terminal e no Claude Code](#no-terminal-e-no-claude-code).
 
 ```sh
-vl rodar loja      # roda a variação padrão e espera o endereço
-vl status          # o que está rodando, com a CPU e a memória
+vl rodar loja-online   # roda a variação padrão e espera o endereço
+vl rodar loja          # o subgrupo: a API e o front, cada um na sua worktree
+vl status              # o que está rodando, com a CPU e a memória
 ```
 
 ### De qualquer lugar
@@ -152,7 +164,7 @@ roda o que já está no launcher: o app e a variação vêm pelo nome, nunca um 
 | Comando | O que faz |
 | --- | --- |
 | `vl status` | O que está rodando: endereço, CPU, memória e portas |
-| `vl apps` | Os apps, com as variações e onde cada um roda |
+| `vl apps` | Os apps, com as variações e onde cada um roda, e os subgrupos |
 | `vl rodar [app]` | Roda a variação padrão e espera o app anunciar o endereço (até 60 s) |
 | `vl parar [app]` | Para o app; `vl parar --todas` para tudo o que está rodando |
 | `vl reiniciar [app]` | Para e roda de novo |
@@ -161,8 +173,13 @@ roda o que já está no launcher: o app e a variação vêm pelo nome, nunca um 
 
 Sem o nome, vale o app da pasta atual, na worktree em que ela está: dentro de
 `.claude\worktrees\feat-x`, o `vl rodar` roda o app nessa worktree, e o vlauncher passa a mostrá-la em
-"Onde rodar". O nome pode ser só um pedaço, sem acento: `vl rodar loja`. Outras opções:
-`-v <variação>`, `--local <branch>`, `--sem-esperar` e `--json`.
+"Onde rodar". O nome pode ser só um pedaço, sem acento: `vl rodar pagamentos` acha o api-pagamentos.
+Outras opções: `-v <variação>`, `--local <branch>`, `--sem-esperar` e `--json`.
+
+O nome de um subgrupo vale para todos os apps dele: `vl rodar loja` sobe cada um com a variação
+escolhida no subgrupo e espera os endereços, e `parar`, `reiniciar` e `saida` valem para todos. Com
+`--local`, roda na worktree da branch cada app que a tiver (a mesma feature no front e na API). Se um app
+e um subgrupo tiverem o mesmo nome, diga qual: `vl rodar "subgrupo loja"`.
 
 ### Com o Claude Code
 
@@ -249,9 +266,11 @@ terminal, com `vl rodar`.
 <summary><b>Como rodo duas worktrees do mesmo app ao mesmo tempo?</b></summary>
 <br>
 
-As duas disputam as portas. O Vite pula sozinho para a próxima porta livre, mas uma API costuma não
-pular. Crie uma variação com outra porta nas variáveis de ambiente, como `PORT=3002` (e, se o front
-encaminha para a API, o endereço dela, como `VITE_API_PROXY_TARGET=http://localhost:3002`).
+Escolha a outra worktree em "Onde rodar" e rode de novo: as duas ficam no ar, cada uma com a sua aba e a
+sua linha no monitor, e as pastas que estão rodando ganham o ponto ciano. Só que as duas disputam as
+portas. O Vite pula sozinho para a próxima porta livre, mas uma API costuma não pular. Crie uma variação
+com outra porta nas variáveis de ambiente, como `PORT=3002` (e, se o front encaminha para a API, o
+endereço dela, como `VITE_API_PROXY_TARGET=http://localhost:3002`).
 
 </details>
 
@@ -335,7 +354,7 @@ Suba a versão em `package.json`, `src-tauri/Cargo.toml` e `src-tauri/tauri.conf
 com `pnpm app:build` e anexe-o a uma Release do GitHub:
 
 ```sh
-gh release create v0.2.0 src-tauri/target/release/bundle/nsis/vlauncher_0.2.0_x64-setup.exe --title "vlauncher 0.2.0"
+gh release create v0.3.0 src-tauri/target/release/bundle/nsis/vlauncher_0.3.0_x64-setup.exe --title "vlauncher 0.3.0"
 ```
 
 O botão "Baixar para Windows" aponta para a Release mais recente.
@@ -366,8 +385,9 @@ src-tauri/src/
   vidro.rs       o acrylic do liquid glass com a janela sem foco
 src-tauri/instalador/  o gancho do instalador que tira o "Launcher" da 0.1.0
 src/
-  lib/           tipos, a ponte com o Rust (api.ts), os stores, o que o vl pede (canal.ts, apps.ts)
-  components/    galeria, capítulo, prancha, painel, monitor, onde rodar, console, diálogos, busca
+  lib/           tipos, a ponte com o Rust (api.ts), os stores, os subgrupos (subgrupos.ts), o que o vl
+                 pede (canal.ts, apps.ts)
+  components/    galeria, capítulo, prancha, subgrupo, painel, monitor, onde rodar, console, diálogos, busca
 claude-code/     a skill vlauncher, que o vl instalar-skill grava
 ```
 
