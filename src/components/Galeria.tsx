@@ -1,5 +1,6 @@
 // Os grupos e os apps, organizáveis: arraste um grupo pela alça para reordenar; arraste um app para
-// outra posição ou para outro grupo (até para um grupo recolhido, soltando no cabeçalho).
+// outra posição ou para outro grupo (até para um grupo recolhido, soltando no cabeçalho); arraste um
+// subgrupo para outra posição no mesmo grupo (ele leva os apps juntos).
 
 import {
   closestCenter,
@@ -20,14 +21,19 @@ import {
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useMemo, useState } from 'react'
 import { acharApp, useConfig } from '../lib/config'
+import { acharSubgrupo, appsDoSubgrupo, idDoItem, itensDaGrade, ordemDosApps } from '../lib/subgrupos'
 import type { App } from '../lib/tipos'
 import { CabecalhoSobreposto, Capitulo } from './Capitulo'
 import { PranchaVisual } from './Prancha'
+import { PranchaSubgrupoVisual } from './PranchaSubgrupo'
 
 type Ordem = Record<string, string[]>
-type Arrasto = { tipo: 'app' | 'grupo'; id: string } | null
+type Arrasto = { tipo: 'app' | 'grupo' | 'subgrupo'; id: string } | null
+type ComDados = { id: string | number; data: { current?: Record<string, unknown> | undefined } }
 
-const tipoDe = (c: { data: { current?: Record<string, unknown> | undefined } }) => c.data.current?.tipo
+const tipoDe = (c: ComDados) => c.data.current?.tipo
+/** Os alvos que ocupam um lugar na grade: os apps e os subgrupos. */
+const naGrade = (c: ComDados) => ['app', 'subgrupo'].includes(String(tipoDe(c)))
 
 export function Galeria() {
   const config = useConfig((s) => s.config)
@@ -46,24 +52,36 @@ export function Galeria() {
     [ordem, config.grupos],
   )
   const appsPorId = useMemo(() => new Map(config.grupos.flatMap((g) => g.apps.map((a) => [a.id, a] as const))), [config.grupos])
-  const grupoDoApp = (id: string) => Object.keys(ordemAtual).find((g) => ordemAtual[g]!.includes(id))
 
-  // Grupo só colide com grupo. App prefere outro app sob o cursor; depois a área de um grupo; depois
-  // o cabeçalho de um grupo (o recolhido).
+  const grupoDoApp = (id: string) => Object.keys(ordemAtual).find((g) => ordemAtual[g]!.includes(id))
+  // O grupo de um alvo da grade: o do app, ou o que o subgrupo traz nos dados.
+  const grupoDoAlvo = (alvo: ComDados) => (tipoDe(alvo) === 'subgrupo' ? String(alvo.data.current?.grupoId) : grupoDoApp(String(alvo.id)))
+  // Sobre um subgrupo, um app entra no lugar do primeiro app dele.
+  const primeiroDoSubgrupo = (subgrupoId: string, lista: string[]) => {
+    const apps = acharSubgrupo(config, subgrupoId)?.subgrupo.apps ?? []
+    return lista.find((id) => apps.includes(id))
+  }
+
+  // Grupo só colide com grupo; subgrupo, com os itens do próprio grupo. App prefere outro app (ou um
+  // subgrupo) sob o cursor; depois a área de um grupo; depois o cabeçalho de um grupo (o recolhido).
   const colisao: CollisionDetection = (args) => {
     if (arrasto?.tipo === 'grupo') {
       return closestCenter({ ...args, droppableContainers: args.droppableContainers.filter((c) => tipoDe(c) === 'grupo') })
     }
-    const alvos = args.droppableContainers.filter((c) => ['app', 'grupo-apps', 'grupo'].includes(String(tipoDe(c))))
+    if (arrasto?.tipo === 'subgrupo') {
+      const grupoId = args.active.data.current?.grupoId
+      return closestCenter({ ...args, droppableContainers: args.droppableContainers.filter((c) => naGrade(c) && grupoDoAlvo(c) === grupoId) })
+    }
+    const alvos = args.droppableContainers.filter((c) => naGrade(c) || ['grupo-apps', 'grupo'].includes(String(tipoDe(c))))
     const sob = pointerWithin({ ...args, droppableContainers: alvos })
     const porTipo = (t: string) => sob.find((c) => tipoDe(args.droppableContainers.find((d) => d.id === c.id)!) === t)
-    const achado = porTipo('app') ?? porTipo('grupo-apps') ?? porTipo('grupo')
+    const achado = porTipo('app') ?? porTipo('subgrupo') ?? porTipo('grupo-apps') ?? porTipo('grupo')
     if (achado) return [achado]
-    return closestCorners({ ...args, droppableContainers: alvos.filter((c) => tipoDe(c) === 'app') })
+    return closestCorners({ ...args, droppableContainers: alvos.filter(naGrade) })
   }
 
   const inicio = ({ active }: DragStartEvent) => {
-    const tipo = active.data.current?.tipo as 'app' | 'grupo'
+    const tipo = active.data.current?.tipo as 'app' | 'grupo' | 'subgrupo'
     setArrasto({ tipo, id: String(active.id) })
     if (tipo === 'app') setOrdem(ordemAtual)
   }
@@ -74,12 +92,19 @@ export function Galeria() {
     const de = grupoDoApp(id)
     const tipo = over.data.current?.tipo
     const para =
-      tipo === 'app' ? grupoDoApp(String(over.id)) : tipo === 'grupo-apps' ? String(over.data.current?.grupoId) : tipo === 'grupo' ? String(over.id) : undefined
+      tipo === 'app' || tipo === 'subgrupo'
+        ? grupoDoAlvo(over)
+        : tipo === 'grupo-apps'
+          ? String(over.data.current?.grupoId)
+          : tipo === 'grupo'
+            ? String(over.id)
+            : undefined
     if (!de || !para || de === para) return
     setOrdem((o) => {
       const atual = o ?? ordemAtual
       const destino = atual[para]!.filter((x) => x !== id)
-      const i = tipo === 'app' ? destino.indexOf(String(over.id)) : -1
+      const alvo = tipo === 'subgrupo' ? primeiroDoSubgrupo(String(over.id), destino) : tipo === 'app' ? String(over.id) : undefined
+      const i = alvo ? destino.indexOf(alvo) : -1
       destino.splice(i < 0 ? destino.length : i, 0, id)
       return { ...atual, [de]: atual[de]!.filter((x) => x !== id), [para]: destino }
     })
@@ -91,15 +116,25 @@ export function Galeria() {
         const ids = config.grupos.map((g) => g.id)
         ordenarGrupos(arrayMove(ids, ids.indexOf(String(active.id)), ids.indexOf(String(over.id))))
       }
-    } else if (arrasto?.tipo === 'app' && ordem) {
-      let final = ordem
+    } else if (arrasto?.tipo === 'app' || arrasto?.tipo === 'subgrupo') {
+      let final = ordemAtual
       const id = String(active.id)
-      const grupo = grupoDoApp(id)
-      if (over && over.data.current?.tipo === 'app' && grupo && grupoDoApp(String(over.id)) === grupo) {
-        const lista = final[grupo]!
-        final = { ...final, [grupo]: arrayMove(lista, lista.indexOf(id), lista.indexOf(String(over.id))) }
+      const grupoId = arrasto.tipo === 'subgrupo' ? String(active.data.current?.grupoId) : grupoDoApp(id)
+      // Trocou de lugar dentro do grupo: reordena os itens da grade (apps e subgrupos) e depois desdobra
+      // cada subgrupo nos apps dele.
+      if (over && over.id !== active.id && grupoId && naGrade(over) && grupoDoAlvo(over) === grupoId) {
+        const grupo = config.grupos.find((g) => g.id === grupoId)
+        const comOrdem = {
+          apps: final[grupoId]!.map((x) => appsPorId.get(x)).filter((a): a is App => Boolean(a)),
+          subgrupos: grupo?.subgrupos,
+        }
+        const itens = itensDaGrade(comOrdem).map(idDoItem)
+        const de = itens.indexOf(id)
+        const para = itens.indexOf(String(over.id))
+        if (de >= 0 && para >= 0) final = { ...final, [grupoId]: ordemDosApps(arrayMove(itens, de, para), comOrdem) }
       }
-      reorganizarApps(final)
+      // O app pode ter mudado de grupo (a ordem provisória): grava sempre; o subgrupo, só se mudou.
+      if (arrasto.tipo === 'app' || final !== ordemAtual) reorganizarApps(final)
     }
     setArrasto(null)
     setOrdem(null)
@@ -112,6 +147,7 @@ export function Galeria() {
 
   const appArrastado = arrasto?.tipo === 'app' ? acharApp(config, arrasto.id)?.app : undefined
   const grupoArrastado = arrasto?.tipo === 'grupo' ? config.grupos.find((g) => g.id === arrasto.id) : undefined
+  const subgrupoArrastado = arrasto?.tipo === 'subgrupo' ? acharSubgrupo(config, arrasto.id) : null
 
   return (
     <DndContext
@@ -139,6 +175,13 @@ export function Galeria() {
       <DragOverlay dropAnimation={{ duration: 220, easing: 'cubic-bezier(0.25, 1, 0.5, 1)' }}>
         {appArrastado && <PranchaVisual app={appArrastado} sobreposta />}
         {grupoArrastado && <CabecalhoSobreposto grupo={grupoArrastado} />}
+        {subgrupoArrastado && (
+          <PranchaSubgrupoVisual
+            subgrupo={subgrupoArrastado.subgrupo}
+            apps={appsDoSubgrupo(subgrupoArrastado.subgrupo, subgrupoArrastado.grupo)}
+            sobreposta
+          />
+        )}
       </DragOverlay>
     </DndContext>
   )

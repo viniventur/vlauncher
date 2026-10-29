@@ -1,19 +1,22 @@
 // Um grupo, como um capítulo da galeria do site: a linha fina em cima, a foto, o nome e quantos
-// apps tem; embaixo, as pranchas dos apps.
+// apps tem; embaixo, as pranchas dos apps e dos subgrupos (no lugar do primeiro app de cada um).
 
 import { useDroppable } from '@dnd-kit/core'
 import { rectSortingStrategy, SortableContext, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ChevronDown, Ellipsis, FolderOpen, FolderSearch, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, Ellipsis, FolderOpen, FolderSearch, GripVertical, LayoutGrid, Pencil, Plus, Trash2 } from 'lucide-react'
+import { useMemo } from 'react'
 import { api } from '../lib/api'
 import { avisarErro } from '../lib/avisos'
 import { useConfig } from '../lib/config'
 import { descartarDoApp } from '../lib/execucoes'
+import { idDoItem, itensDaGrade, sugestoesDeSubgrupos } from '../lib/subgrupos'
 import type { App, Grupo } from '../lib/tipos'
 import { useUi } from '../lib/ui'
 import { Capa } from './Capa'
 import { Menu } from './Flutuante'
 import { Prancha } from './Prancha'
+import { PranchaSubgrupo } from './PranchaSubgrupo'
 
 interface Props {
   grupo: Grupo
@@ -44,15 +47,20 @@ export function Capitulo({ grupo, apps, soCabecalho }: Props) {
 function Pranchas({ grupo, apps }: { grupo: Grupo; apps: App[] }) {
   const { setNodeRef, isOver } = useDroppable({ id: `soltar:${grupo.id}`, data: { tipo: 'grupo-apps', grupoId: grupo.id } })
   const abrirDialogo = useUi((s) => s.abrirDialogo)
+  const itens = useMemo(() => itensDaGrade({ apps, subgrupos: grupo.subgrupos }), [apps, grupo.subgrupos])
   return (
-    <SortableContext items={apps.map((a) => a.id)} strategy={rectSortingStrategy}>
+    <SortableContext items={itens.map(idDoItem)} strategy={rectSortingStrategy}>
       <div
         ref={setNodeRef}
         className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-x-7 gap-y-9 pt-6 pb-4"
       >
-        {apps.map((app) => (
-          <Prancha key={app.id} app={app} grupoId={grupo.id} />
-        ))}
+        {itens.map((item) =>
+          item.tipo === 'app' ? (
+            <Prancha key={item.app.id} app={item.app} grupoId={grupo.id} />
+          ) : (
+            <PranchaSubgrupo key={item.subgrupo.id} subgrupo={item.subgrupo} apps={item.apps} grupoId={grupo.id} />
+          ),
+        )}
         {apps.length === 0 && (
           <button
             onClick={() => abrirDialogo({ tipo: 'app', grupoId: grupo.id, pasta: grupo.pasta })}
@@ -71,6 +79,7 @@ function Pranchas({ grupo, apps }: { grupo: Grupo; apps: App[] }) {
 function Cabecalho({ grupo, quantos, alca }: { grupo: Grupo; quantos: number; alca: Record<string, unknown> }) {
   const abrirDialogo = useUi((s) => s.abrirDialogo)
   const { editarGrupo, removerGrupo } = useConfig.getState()
+  const sugestoes = useMemo(() => sugestoesDeSubgrupos(grupo).length, [grupo])
 
   const remover = async () => {
     const aviso =
@@ -122,6 +131,14 @@ function Cabecalho({ grupo, quantos, alca }: { grupo: Grupo; quantos: number; al
         )}
         itens={[
           { rotulo: 'Editar o grupo', icone: <Pencil />, acao: () => abrirDialogo({ tipo: 'grupo', id: grupo.id }) },
+          grupo.apps.length >= 2
+            ? {
+                rotulo: 'Novo subgrupo',
+                icone: <LayoutGrid />,
+                detalhe: sugestoes > 0 ? (sugestoes === 1 ? '1 sugerido' : `${sugestoes} sugeridos`) : undefined,
+                acao: () => abrirDialogo({ tipo: 'subgrupo', grupoId: grupo.id }),
+              }
+            : null,
           grupo.pasta
             ? { rotulo: 'Procurar apps na pasta', icone: <FolderSearch />, acao: () => abrirDialogo({ tipo: 'importar', grupoId: grupo.id }) }
             : null,

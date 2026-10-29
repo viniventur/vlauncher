@@ -55,6 +55,9 @@ export function itensDaGrade(grupo: ComSubgrupos): ItemDaGrade[] {
   return itens
 }
 
+/** O id de um item da grade (o do app ou o do subgrupo), o mesmo do arrastar. */
+export const idDoItem = (item: ItemDaGrade) => (item.tipo === 'app' ? item.app.id : item.subgrupo.id)
+
 /** Depois de arrastar na grade (os ids dos itens, apps e subgrupos), a ordem dos apps do grupo. */
 export function ordemDosApps(itens: string[], grupo: ComSubgrupos): string[] {
   const subgrupos = new Map(subgruposValidos(grupo).map((s) => [s.id, s]))
