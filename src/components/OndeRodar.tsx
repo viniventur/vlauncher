@@ -1,19 +1,36 @@
 // Onde rodar: a pasta principal ou uma das worktrees, e as branches que ainda não têm worktree (que
 // ganham uma num clique). Embaixo, o que falta na pasta escolhida: node_modules, .env, .npmrc. Num
-// monorepo, o app roda na mesma subpasta de cada worktree (o Rust já devolve essa pasta).
+// monorepo, o app roda na mesma subpasta de cada worktree (o Rust já devolve essa pasta). A pasta em
+// que o app está rodando ganha o ponto ciano e o nome da variação, no botão e na lista.
 
 import { Check, FolderGit2, GitBranch, GitBranchPlus, Package, RefreshCw, Search, TriangleAlert, ArrowRightLeft, FileKey } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { avisar, avisarErro } from '../lib/avisos'
 import { useConfig } from '../lib/config'
-import { pastaDoApp, useExecucoes, useExecucoesDoApp } from '../lib/execucoes'
+import { estaAtiva, pastaDoApp, useExecucoes, useExecucoesDoApp } from '../lib/execucoes'
 import { rotuloDaWorktree } from '../lib/git'
 import { combina, haQuanto, mesmaPasta, nomeDaPasta, relativoA } from '../lib/texto'
-import type { App, Branch, Locais, Worktree } from '../lib/tipos'
+import type { App, Branch, Execucao, Locais, Worktree } from '../lib/tipos'
 import { Flutuante } from './Flutuante'
 
 const ROTULO_INSTALAR = 'instalar dependências'
+
+/** As variações do app que estão rodando na pasta (sem os comandos avulsos, como instalar as dependências). */
+const rodandoNa = (execucoes: Execucao[], w: Worktree) => [
+  ...new Set(execucoes.filter((e) => e.variacaoId && estaAtiva(e) && mesmaPasta(e.pasta, w.pasta)).map((e) => e.rotulo)),
+]
+
+/** O nome da pasta, com o ponto ciano e as variações quando o app está rodando nela. */
+function NomeDaPasta({ w, rodando }: { w: Worktree; rodando: string[] }) {
+  return (
+    <span className="flex items-center gap-2 font-semibold">
+      {rodando.length > 0 && <span className="ponto-vivo" />}
+      <span className="truncate">{rotuloDaWorktree(w)}</span>
+      {rodando.length > 0 && <span className="shrink-0 text-legenda font-normal text-destaque">{rodando.join(', ')}</span>}
+    </span>
+  )
+}
 
 export function OndeRodar({ app }: { app: App }) {
   const editarApp = useConfig((s) => s.editarApp)
@@ -49,7 +66,8 @@ export function OndeRodar({ app }: { app: App }) {
   }, [locais])
 
   // Terminou de instalar as dependências: a lista é refeita (o aviso some).
-  const instalacoes = useExecucoesDoApp(app.id).filter((e) => e.rotulo === ROTULO_INSTALAR)
+  const execucoes = useExecucoesDoApp(app.id)
+  const instalacoes = execucoes.filter((e) => e.rotulo === ROTULO_INSTALAR)
   const terminadas = instalacoes.filter((e) => e.estado === 'encerrada').length
   const instalando = instalacoes.some((e) => e.estado !== 'encerrada')
   const terminadasAntes = useRef(terminadas)
@@ -105,7 +123,7 @@ export function OndeRodar({ app }: { app: App }) {
           >
             <GitBranch className="size-4 shrink-0 text-destaque" />
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-semibold">{atual ? rotuloDaWorktree(atual) : '—'}</span>
+              {atual ? <NomeDaPasta w={atual} rodando={rodandoNa(execucoes, atual)} /> : <span className="block font-semibold">—</span>}
               <span className="block truncate text-legenda text-texto-3">
                 {atual?.principal ? 'pasta principal' : atual ? relativoA(atual.caminho, raiz) : ''}
                 {locais.subpasta && ` · ${locais.subpasta}`}
@@ -122,6 +140,7 @@ export function OndeRodar({ app }: { app: App }) {
             app={app}
             locais={locais}
             atual={atual}
+            execucoes={execucoes}
             recarregar={carregar}
             fechar={fechar}
             escolher={(w) => {
@@ -167,13 +186,15 @@ interface PropsLista {
   app: App
   locais: Locais
   atual: Worktree | undefined
+  /** As execuções do app, para marcar as pastas em que ele está rodando. */
+  execucoes: Execucao[]
   recarregar: () => Promise<void>
   /** Criou a worktree ou trocou a branch: a escolha está feita, a lista fecha. */
   fechar: () => void
   escolher: (w: Worktree) => void
 }
 
-function Lista({ app, locais, atual, recarregar, fechar, escolher }: PropsLista) {
+function Lista({ app, locais, atual, execucoes, recarregar, fechar, escolher }: PropsLista) {
   const editarApp = useConfig((s) => s.editarApp)
   const raiz = locais.worktrees[0]?.caminho ?? app.pasta
   const [busca, setBusca] = useState('')
@@ -258,7 +279,7 @@ function Lista({ app, locais, atual, recarregar, fechar, escolher }: PropsLista)
                 >
                   <span className="mt-1 w-4 shrink-0 text-destaque">{escolhida && <Check className="size-4" />}</span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold">{rotuloDaWorktree(w)}</span>
+                    <NomeDaPasta w={w} rodando={rodandoNa(execucoes, w)} />
                     <span className="block truncate text-legenda text-texto-3">
                       {w.principal ? 'pasta principal' : relativoA(w.caminho, raiz)}
                       {w.precisaDependencias && ' · sem node_modules'}
