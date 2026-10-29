@@ -12,6 +12,7 @@
 <p align="center">
   <a href="#instalar">Instalar</a> ·
   <a href="#como-usar">Como usar</a> ·
+  <a href="#na-linha-de-comando-o-vl">vl</a> ·
   <a href="#atalhos">Atalhos</a> ·
   <a href="#privacidade-e-segurança">Privacidade</a> ·
   <a href="#desenvolver">Desenvolver</a>
@@ -23,8 +24,10 @@
 
 > **English:** vlauncher is a Windows desktop app to organize and run your local projects. Group your
 > apps, define how each one runs (`npm run dev:all`, `docker compose up`...), pick the branch or git
-> worktree before running, and follow the output in place. Built with Tauri 2, React and Rust. The
-> interface is in Brazilian Portuguese.
+> worktree before running, follow the output in place and watch each app's CPU, memory and ports. The
+> bundled `vl` command line drives it from any terminal, so a server started by Claude Code (through
+> the included skill) shows up in the launcher too. Built with Tauri 2, React and Rust. The interface
+> is in Brazilian Portuguese.
 
 ## Por quê
 
@@ -72,6 +75,21 @@ nome e aperte Enter para rodar uma variação, abrir o endereço, parar o que es
 **Fica na bandeja.** Com algo rodando, fechar a janela só a esconde: os servidores seguem no ar. "Parar
 todas" pede confirmação e lista o que vai parar; sair do vlauncher encerra tudo.
 
+**Monitora.** O monitor mostra quanto cada app pesa: a CPU e a memória da árvore de processos inteira
+(o `cmd`, o `npm`, o `node`, o `vite`), de 2 em 2 segundos e com os últimos 3 minutos num minigráfico,
+as portas em que ele escuta e os processos, um a um. A soma dos apps aparece ao lado do que a máquina
+inteira está usando. Mede como o Gerenciador de Tarefas: a CPU em porcentagem da máquina, a memória pelo
+conjunto de trabalho privado. Abre pelo "N rodando" do topo.
+
+<p align="center">
+  <img src="docs/monitor.webp" alt="O monitor: a CPU e a memória de dois apps rodando, com os processos de um deles">
+</p>
+
+**Atende o terminal e o Claude Code.** O `vl`, que vem junto, roda, para, reinicia e lê a saída dos
+apps do vlauncher pela linha de comando. O que sobe por ele aparece no launcher como qualquer outro, com
+a saída e o monitor. Com a skill que acompanha o `vl`, o Claude Code passa a subir os servidores por
+ele, em vez de deixá-los presos num shell dele.
+
 **Tinta, papel e liquid glass.** Tema escuro ou claro e, por cima de qualquer um dos dois, o liquid
 glass: a janela fica transparente (de 0 a 100%), com o acrylic do Windows desfocando o que está atrás.
 
@@ -83,10 +101,17 @@ glass: a janela fica transparente (de 0 a 100%), com o acrylic do Windows desfoc
 
 O vlauncher roda no **Windows 10 e 11** (testado no 11) e usa o WebView2, que já vem no Windows 11.
 
-1. Baixe o instalador (`Launcher_x.y.z_x64-setup.exe`) na página de Releases do repositório, ou gere o
+1. Baixe o instalador (`vlauncher_x.y.z_x64-setup.exe`) na página de Releases do repositório, ou gere o
    seu (veja [Desenvolver](#desenvolver)).
 2. O instalador não é assinado, então o Windows pode mostrar "O Windows protegeu o computador". Clique
    em **Mais informações → Executar assim mesmo**.
+
+Ele instala em `%LOCALAPPDATA%\vlauncher`, com o `vl.exe` ao lado do `vlauncher.exe`. Para usar o `vl`
+de qualquer terminal, ponha essa pasta no PATH.
+
+Até a 0.1.0, o vlauncher se instalava como "Launcher". Quem tem essa versão: saia dela pela bandeja
+("Encerrar os apps e sair") e rode o instalador novo. Ele remove o "Launcher" e mantém os grupos, os apps
+e as fotos (os dados ficam na mesma pasta).
 
 Para os atalhos do painel, deixe no PATH o que quiser usar: o [Windows Terminal](https://aka.ms/terminal)
 (`wt`), o VS Code (`code`), o PowerShell 7 (`pwsh`) e o [Claude Code](https://docs.anthropic.com/claude-code)
@@ -113,7 +138,7 @@ Para os atalhos do painel, deixe no PATH o que quiser usar: o [Windows Terminal]
 | --- | --- |
 | `Ctrl+Alt+Espaço` | De qualquer lugar do Windows: mostra o vlauncher com a busca aberta (ou o esconde) |
 | `Ctrl+K` | Abre a busca |
-| `Esc` | Fecha a busca, o diálogo ou o painel |
+| `Esc` | Fecha a busca, o diálogo, o painel ou o monitor |
 | `Ctrl+Alt+=` / `Ctrl+Alt+-` | Com o liquid glass ligado: menos ou mais transparente, de 5 em 5 |
 | `Ctrl+Alt+0` | Com o liquid glass ligado: opaco |
 
@@ -137,6 +162,41 @@ livre, mas uma API costuma não pular. Crie uma variação com outra porta nas v
 exemplo `PORT=3002` (e, se o front encaminha para a API, o endereço dela, como
 `VITE_API_PROXY_TARGET=http://localhost:3002`).
 
+## Na linha de comando: o `vl`
+
+O `vl` fala com o vlauncher aberto (e o abre, só na bandeja, se ele estiver fechado). Só roda o que já
+está no launcher: o app e a variação vêm pelo nome, nunca um comando.
+
+| Comando | O que faz |
+| --- | --- |
+| `vl status` | O que está rodando: endereço, CPU, memória, portas |
+| `vl apps` | Os apps, com as variações e onde cada um roda |
+| `vl rodar [app]` | Roda a variação padrão e espera o app anunciar o endereço (até 60 s) |
+| `vl parar [app]` | Para o app; `vl parar --todas` para tudo o que está rodando |
+| `vl reiniciar [app]` | Para e roda de novo |
+| `vl saida [app]` | As últimas linhas da saída (`-n 200` para mais) |
+| `vl abrir [app]` | Traz o vlauncher, com o painel do app aberto |
+
+Sem o nome, vale o app da pasta atual, na worktree em que ela está: dentro de
+`.claude\worktrees\feat-x`, o `vl rodar` roda o app nessa worktree, e o vlauncher passa a mostrá-la em
+"Onde rodar". O nome pode ser só um pedaço, sem acento: `vl rodar loja`. Outras opções: `-v <variação>`,
+`--local <branch>`, `--sem-esperar` e `--json`. O `vl` sai com 0 quando deu certo, 1 quando o vlauncher
+recusou o pedido (ou o app caiu ao subir) e 2 quando não conseguiu falar com ele.
+
+### Com o Claude Code
+
+Um servidor que o Claude Code sobe por conta própria (`npm run dev` num shell dele) não aparece no
+vlauncher. A skill `vlauncher` ensina o Claude a usar o `vl` para isso:
+
+```sh
+vl instalar-skill                        # em ~/.claude (ou na CLAUDE_CONFIG_DIR)
+vl instalar-skill --em ~/.claude-pessoal # noutra conta
+```
+
+Depois, numa sessão, "sobe a loja" vira `vl rodar loja`: a loja aparece rodando no vlauncher, com a
+saída e o monitor, e o Claude lê os erros pelo `vl saida`. A skill está em
+[`claude-code/vlauncher/SKILL.md`](claude-code/vlauncher/SKILL.md).
+
 ## Onde ficam os dados
 
 Tudo fica no seu computador, em `%APPDATA%\br.com.viniciusventura.launcher\`:
@@ -151,6 +211,11 @@ Tudo fica no seu computador, em `%APPDATA%\br.com.viniciusventura.launcher\`:
   quando você clica em "Buscar no remoto" e o navegador quando você abre um endereço.
 - **Os comandos rodam com o seu usuário**, como se você os digitasse no terminal. Só adicione projetos e
   comandos em que você confia.
+- **O `vl` conversa só dentro da máquina**, por um named pipe (`\\.\pipe\vlauncher-<usuário>`) que recusa
+  conexões de outras máquinas. Pela permissão padrão do Windows, só o seu usuário (e os administradores)
+  escreve nele. O pedido traz o nome de um app e de uma variação já cadastrados, nunca um comando.
+- **O monitor só lê**: os processos de cada execução, a CPU e a memória deles e as portas em escuta, como
+  o Gerenciador de Tarefas. Nada disso é gravado.
 - **Não guarde segredos nas variações.** As variáveis de ambiente ficam em texto puro no `launcher.json`.
   Segredos continuam no `.env` do projeto.
 - **Os arquivos locais só andam dentro do repositório**: o vlauncher copia `.env*` e `.npmrc` da pasta
@@ -190,6 +255,9 @@ em `window.launcher`.
 LAUNCHER_DADOS=C:/caminho/dados-teste WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9223 pnpm app
 ```
 
+O `vl` de desenvolvimento sai do `cargo build --bin vl` (em `src-tauri\target\debug`). Com a mesma
+`LAUNCHER_DADOS` no terminal, ele fala com o vlauncher do teste, nunca com o instalado.
+
 ### Por dentro
 
 - **[Tauri 2](https://tauri.app)**: o núcleo em Rust inicia e encerra processos (com a árvore inteira),
@@ -201,20 +269,27 @@ LAUNCHER_DADOS=C:/caminho/dados-teste WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--re
 ```
 src-tauri/src/
   processos.rs   execuções: iniciar, a saída em lotes, a URL anunciada, parar a árvore (taskkill /T)
+  monitor.rs     a CPU, a memória, os processos e as portas de cada execução, de 2 em 2 s
+  canal.rs       o named pipe por onde o vl fala com o launcher
+  bin/vl.rs      o vl, a linha de comando (protocolo.rs: o nome do pipe, dividido com ele)
   git.rs         worktrees, branches, criar worktree, trocar branch, copiar .env e .npmrc
   projetos.rs    reconhece o projeto numa pasta e os scripts que sobem o app
   dados.rs       launcher.json e as imagens
   sistema.rs     VS Code, Windows Terminal, Claude Code, Explorer, navegador
   janela.rs      bandeja e atalho global
   vidro.rs       o acrylic do liquid glass com a janela sem foco
+  instalador/    o gancho do instalador que tira o "Launcher" da 0.1.0
 src/
-  lib/           tipos, a ponte com o Rust (api.ts), os dados de exemplo e os stores
-  components/    galeria, capítulo, prancha, painel, onde rodar, console, diálogos, busca
+  lib/           tipos, a ponte com o Rust (api.ts), os stores, o que o vl pede (canal.ts, apps.ts)
+  components/    galeria, capítulo, prancha, painel, monitor, onde rodar, console, diálogos, busca
+claude-code/     a skill vlauncher, que o vl instalar-skill grava
 ```
 
 ## Limitações
 
 - **Só Windows.** Usa o `cmd`, o `taskkill`, o Windows Terminal, o WebView2 e o acrylic do Windows.
+- **O monitor e o `vl` só enxergam o que o vlauncher rodou.** Um servidor que você sobe noutro terminal
+  não aparece lá.
 - **Interface em português.**
 - **Instalador sem assinatura de código**, por isso o aviso do SmartScreen na primeira vez.
 
