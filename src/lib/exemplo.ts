@@ -157,13 +157,14 @@ window.setInterval(() => {
   const amostra: Amostra = {
     instante: Date.now(),
     nucleos: 16,
-    cpuMaquina: 18 + Math.random() * 14,
+    cpuMaquina: 0,
     memoriaUsada: 9.8 * 1024 * mb,
     memoriaTotal: 16 * 1024 * mb,
     execucoes: rodando.map(({ e }) => {
-      const antes = passeio.get(e.id) ?? { cpu: 9, memoria: 280 * mb }
+      const antes = passeio.get(e.id) ?? { cpu: 4, memoria: 280 * mb }
+      // Um servidor de desenvolvimento parado: pouca CPU, com um pico de vez em quando (um rebuild).
       const agora = {
-        cpu: Math.min(40, Math.max(0.2, antes.cpu * 0.7 + Math.random() * 5 + (Math.random() < 0.08 ? 18 : 0))),
+        cpu: Math.min(30, Math.max(0.3, antes.cpu * 0.6 + Math.random() * 3 + (Math.random() < 0.07 ? 12 : 0))),
         memoria: Math.max(120 * mb, antes.memoria + (Math.random() - 0.4) * 12 * mb),
       }
       passeio.set(e.id, agora)
@@ -185,6 +186,8 @@ window.setInterval(() => {
       }
     }),
   }
+  // A máquina inteira inclui os apps.
+  amostra.cpuMaquina = Math.min(100, amostra.execucoes.reduce((s, u) => s + u.cpu, 0) + 7 + Math.random() * 8)
   for (const cb of ouvintes.amostra) cb(amostra)
 }, 2000)
 
