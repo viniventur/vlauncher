@@ -92,7 +92,9 @@ export function OndeRodar({ app }: { app: App }) {
   }
 
   return (
-    <div className="grid gap-3">
+    // grid-cols-1 é minmax(0, 1fr): sem ela, a coluna cresce até caber o caminho inteiro (um
+    // monorepo fundo, uma worktree de nome longo) e o painel ganha rolagem lateral em vez de truncar.
+    <div className="grid grid-cols-1 gap-3">
       <Flutuante
         className="w-[min(36rem,calc(100vw-4rem))]"
         gatilho={(abrir, aberto) => (
