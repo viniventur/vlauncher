@@ -98,7 +98,7 @@ function Cabecalho({ grupo, quantos, alca }: { grupo: Grupo; quantos: number; al
         data-alvo-imagem={`grupo:${grupo.id}`}
         onClick={() => abrirDialogo({ tipo: 'grupo', id: grupo.id })}
         className="shrink-0 rounded-md"
-        title="Trocar a foto do grupo (ou arraste uma imagem para cá)"
+        title={`Trocar a foto do grupo (ou arraste uma imagem para cá)${grupo.imagemOrigem ? `\nVeio de ${grupo.imagemOrigem}` : ''}`}
       >
         <Capa nome={grupo.nome} imagem={grupo.imagem} ajuste={grupo.ajuste} tamanho="pequena" className="size-12 rounded-md" />
       </button>

@@ -33,6 +33,8 @@ export interface App {
   descricao?: string
   /** Nome do arquivo em %APPDATA%\...\imagens. */
   imagem?: string
+  /** De onde a foto veio (o arquivo escolhido ou arrastado), para trocar por outra da mesma pasta. */
+  imagemOrigem?: string
   ajuste?: Ajuste
   /** A pasta principal do repositório. */
   pasta: string
@@ -50,6 +52,8 @@ export interface Grupo {
   id: string
   nome: string
   imagem?: string
+  /** De onde a foto veio (ver App.imagemOrigem). */
+  imagemOrigem?: string
   ajuste?: Ajuste
   /** A pasta onde ficam os projetos do grupo (D:\projetos\trabalho), para achar os novos. */
   pasta?: string

@@ -211,6 +211,8 @@ export const exemplo: Api = {
   },
   removerImagem: async (nome) => void imagens.delete(nome),
   urlDaImagem: (nome) => imagens.get(nome) ?? '',
+  localizarOrigem: async () => null,
+  mostrarNoExplorer: async (caminho) => console.info('[exemplo] Explorer em', caminho),
 
   iniciarExecucao: async (pedido) => iniciar(pedido),
   async pararExecucao(id) {

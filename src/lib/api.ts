@@ -18,6 +18,9 @@ export interface Api {
   importarImagemColada(bytes: Uint8Array, extensao: string): Promise<string>
   removerImagem(nome: string): Promise<void>
   urlDaImagem(nome: string): string
+  /** De onde veio uma foto sem a origem guardada: o arquivo igual a ela nas pastas dadas e nas do usuário. */
+  localizarOrigem(nome: string, dicas: string[]): Promise<string | null>
+  mostrarNoExplorer(caminho: string): Promise<void>
 
   iniciarExecucao(pedido: Pedido): Promise<Execucao>
   pararExecucao(id: string): Promise<void>
@@ -46,7 +49,8 @@ export interface Api {
   abrirClaude(pasta: string, comando: string): Promise<void>
 
   escolherPasta(titulo: string, padrao?: string): Promise<string | null>
-  escolherImagem(): Promise<string | null>
+  /** Abre na pasta dada (a da foto atual, para trocar por outra dali). */
+  escolherImagem(padrao?: string): Promise<string | null>
   confirmar(mensagem: string, titulo: string, ok?: string): Promise<boolean>
   definirTemaDaJanela(tema: Tema): Promise<void>
   /** O acrylic do Windows atrás da janela (no liquid glass com desfoque), ou nenhum efeito. */
@@ -84,6 +88,8 @@ const tauri: Api = {
   importarImagemColada: (bytes, extensao) => invoke('importar_imagem_colada', bytes, { headers: { extensao } }),
   removerImagem: (nome) => invoke('remover_imagem', { nome }),
   urlDaImagem: (nome) => convertFileSrc(`${pastaDados}\\imagens\\${nome}`),
+  localizarOrigem: (nome, dicas) => invoke('localizar_origem', { nome, dicas }),
+  mostrarNoExplorer: (caminho) => invoke('mostrar_no_explorer', { caminho }),
 
   iniciarExecucao: (pedido) => invoke('iniciar_execucao', { pedido }),
   pararExecucao: (id) => invoke('parar_execucao', { id }),
@@ -115,9 +121,10 @@ const tauri: Api = {
     const r = await open({ directory: true, title: titulo, defaultPath: padrao })
     return typeof r === 'string' ? r : null
   },
-  async escolherImagem() {
+  async escolherImagem(padrao) {
     const r = await open({
       title: 'Escolher imagem',
+      defaultPath: padrao,
       filters: [{ name: 'Imagens', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif', 'svg'] }],
     })
     return typeof r === 'string' ? r : null

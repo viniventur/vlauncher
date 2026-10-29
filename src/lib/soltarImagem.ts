@@ -7,9 +7,10 @@ import { avisar, avisarErro } from './avisos'
 import { useConfig } from './config'
 
 const IMAGEM = /\.(png|jpe?g|webp|gif|avif|svg)$/i
-const campos = new Map<string, (nome: string) => void>()
+const campos = new Map<string, (nome: string, origem: string) => void>()
 
-export function registrarCampoDeImagem(id: string, aoReceber: (nome: string) => void) {
+/** Um campo de imagem de diálogo recebe a foto solta nele: o nome da cópia e o arquivo de onde veio. */
+export function registrarCampoDeImagem(id: string, aoReceber: (nome: string, origem: string) => void) {
   campos.set(id, aoReceber)
   return () => void campos.delete(id)
 }
@@ -44,9 +45,9 @@ export async function ouvirImagensSoltas() {
     const [tipoDoAlvo, id = ''] = alvo.getAttribute('data-alvo-imagem')!.split(':')
     try {
       const nome = await api.importarImagem(imagem)
-      if (tipoDoAlvo === 'app') useConfig.getState().editarApp(id, { imagem: nome })
-      else if (tipoDoAlvo === 'grupo') useConfig.getState().editarGrupo(id, { imagem: nome })
-      else campos.get(id)?.(nome)
+      if (tipoDoAlvo === 'app') useConfig.getState().editarApp(id, { imagem: nome, imagemOrigem: imagem })
+      else if (tipoDoAlvo === 'grupo') useConfig.getState().editarGrupo(id, { imagem: nome, imagemOrigem: imagem })
+      else campos.get(id)?.(nome, imagem)
     } catch (e) {
       avisarErro(e)
     }

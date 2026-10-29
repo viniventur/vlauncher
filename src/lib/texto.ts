@@ -83,6 +83,27 @@ export function caminhoWindows(caminho: string) {
   return caminho.trim().replaceAll('/', '\\').replace(/(?<!^[A-Za-z]:)\\+$/, '')
 }
 
+/** O caminho de um arquivo em até `maximo` letras: a unidade e o fim, que é a parte que se lê. */
+export function caminhoCurto(caminho: string, maximo = 56) {
+  if (caminho.length <= maximo) return caminho
+  const partes = caminho.replaceAll('/', '\\').split('\\')
+  const unidade = partes[0]!
+  let fim = partes[partes.length - 1]!
+  for (let i = partes.length - 2; i > 0; i--) {
+    const maior = `${partes[i]}\\${fim}`
+    if (`${unidade}\\…\\${maior}`.length > maximo) break
+    fim = maior
+  }
+  return `${unidade}\\…\\${fim}`
+}
+
+/** A pasta de um arquivo: "D:\fotos\logo.png" → "D:\fotos". */
+export function pastaDe(caminho: string) {
+  const c = caminho.replaceAll('/', '\\')
+  const i = c.lastIndexOf('\\')
+  return i > 0 ? c.slice(0, i) : c
+}
+
 /** O último pedaço do caminho. */
 export function nomeDaPasta(caminho: string) {
   return caminho.replaceAll('/', '\\').replace(/\\+$/, '').split('\\').pop() ?? caminho

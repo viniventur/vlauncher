@@ -6,7 +6,7 @@
 //! mesmo arquivo), a variável LAUNCHER_DADOS aponta para outra pasta.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::ipc::{InvokeBody, Request};
 use tauri::{AppHandle, Manager};
 
@@ -100,6 +100,80 @@ pub fn importar_imagem_colada(app: AppHandle, request: Request<'_>) -> Result<St
     Ok(nome)
 }
 
+/// As pastas do usuário onde as fotos costumam estar, inclusive as que o OneDrive levou.
+fn pastas_do_usuario() -> Vec<PathBuf> {
+    let mut lista = Vec::new();
+    if let Some(casa) = std::env::var_os("USERPROFILE").map(PathBuf::from) {
+        lista.extend(["Downloads", "Pictures", "Desktop", "Documents"].map(|p| casa.join(p)));
+    }
+    if let Some(nuvem) = std::env::var_os("OneDrive").map(PathBuf::from) {
+        lista.extend(["Imagens", "Pictures", "Área de Trabalho", "Desktop", "Documentos", "Documents"].map(|p| nuvem.join(p)));
+    }
+    lista.into_iter().filter(|p| p.is_dir()).collect()
+}
+
+/// Pastas que nunca guardam a foto escolhida e só atrasam a busca.
+const PULAR: [&str; 8] = ["node_modules", "target", "dist", "build", "venv", "__pycache__", "AppData", "vendor"];
+/// Quantos arquivos e pastas a busca olha no máximo, somando todas as pastas.
+const MAXIMO_VISITADOS: usize = 300_000;
+
+/// Um arquivo de imagem igual a `alvo` (mesmo tamanho e mesmo conteúdo) dentro de `raiz`, até a
+/// `profundidade` dada. Sem seguir atalhos de pasta, sem pastas ocultas.
+fn procurar_igual(raiz: &Path, profundidade: usize, alvo: &[u8], visitados: &mut usize) -> Option<PathBuf> {
+    let mut pilha = vec![(raiz.to_path_buf(), 0usize)];
+    while let Some((pasta, nivel)) = pilha.pop() {
+        let Ok(entradas) = fs::read_dir(&pasta) else { continue };
+        for entrada in entradas.flatten() {
+            *visitados += 1;
+            if *visitados > MAXIMO_VISITADOS {
+                return None;
+            }
+            let Ok(tipo) = entrada.file_type() else { continue };
+            let nome = entrada.file_name().to_string_lossy().into_owned();
+            if tipo.is_dir() {
+                if nivel < profundidade && !nome.starts_with('.') && !PULAR.contains(&nome.as_str()) {
+                    pilha.push((entrada.path(), nivel + 1));
+                }
+                continue;
+            }
+            let eh_imagem = Path::new(&nome)
+                .extension()
+                .is_some_and(|e| EXTENSOES.contains(&e.to_string_lossy().to_lowercase().as_str()));
+            if tipo.is_file()
+                && eh_imagem
+                && entrada.metadata().is_ok_and(|m| m.len() == alvo.len() as u64)
+                && fs::read(entrada.path()).is_ok_and(|bytes| bytes == alvo)
+            {
+                return Some(entrada.path());
+            }
+        }
+    }
+    None
+}
+
+/// De onde veio uma foto escolhida antes de o launcher guardar a origem: o arquivo igual à cópia dela,
+/// procurado nas pastas dadas (a do app, a do grupo) e depois nas do usuário (Downloads, Imagens, Área
+/// de Trabalho, Documentos). None se não achar.
+#[tauri::command]
+pub async fn localizar_origem(app: AppHandle, nome: String, dicas: Vec<String>) -> Result<Option<String>, String> {
+    if nome.contains(['/', '\\']) || nome.contains("..") {
+        return Err("Nome de imagem inválido.".into());
+    }
+    let copia = pasta_dados(&app)?.join("imagens").join(&nome);
+    tauri::async_runtime::spawn_blocking(move || {
+        let alvo = fs::read(&copia).map_err(|e| format!("Não consegui ler a foto: {e}"))?;
+        let mut raizes: Vec<(PathBuf, usize)> = dicas.iter().map(|d| (PathBuf::from(d), 6)).filter(|(p, _)| p.is_dir()).collect();
+        raizes.extend(pastas_do_usuario().into_iter().map(|p| (p, 4)));
+        let mut visitados = 0;
+        Ok(raizes
+            .iter()
+            .find_map(|(raiz, profundidade)| procurar_igual(raiz, *profundidade, &alvo, &mut visitados))
+            .map(|p| p.to_string_lossy().into_owned()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub fn remover_imagem(app: AppHandle, nome: String) -> Result<(), String> {
     if nome.contains(['/', '\\']) || nome.contains("..") {
@@ -110,4 +184,28 @@ pub fn remover_imagem(app: AppHandle, nome: String) -> Result<(), String> {
         fs::remove_file(caminho).map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod testes {
+    use super::*;
+
+    #[test]
+    fn acha_a_foto_igual_e_ignora_as_parecidas() {
+        let raiz = std::env::temp_dir().join(format!("vlauncher-origem-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&raiz);
+        let fundo = raiz.join("projeto").join("public").join("img");
+        fs::create_dir_all(&fundo).unwrap();
+        fs::create_dir_all(raiz.join("node_modules").join("pacote")).unwrap();
+        // Mesmo tamanho e conteúdo diferente, e uma cópia igual dentro de node_modules: nenhuma vale.
+        fs::write(fundo.join("outra.png"), b"PNG-B").unwrap();
+        fs::write(raiz.join("node_modules").join("pacote").join("logo.png"), b"PNG-A").unwrap();
+        fs::write(fundo.join("Logo.PNG"), b"PNG-A").unwrap();
+        let mut visitados = 0;
+        let achada = procurar_igual(&raiz, 6, b"PNG-A", &mut visitados);
+        assert_eq!(achada, Some(fundo.join("Logo.PNG")));
+        // Fundo demais para a profundidade dada.
+        assert_eq!(procurar_igual(&raiz, 2, b"PNG-A", &mut visitados), None);
+        let _ = fs::remove_dir_all(&raiz);
+    }
 }

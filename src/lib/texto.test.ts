@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  caminhoCurto,
   caminhoWindows,
   combina,
   escreverEnv,
@@ -9,6 +10,7 @@ import {
   iniciais,
   lerEnv,
   mesmaPasta,
+  pastaDe,
   relativoA,
   urlCurta,
 } from './texto'
@@ -39,6 +41,14 @@ describe('texto', () => {
     expect(estaDentro('D:\\proj\\app', 'D:\\proj\\app')).toBe(true)
     // Começar com o mesmo nome não é estar dentro.
     expect(estaDentro('D:\\proj\\app-admin', 'D:\\proj\\app')).toBe(false)
+  })
+
+  it('encurta o caminho da foto pelo meio, mantendo o arquivo', () => {
+    const longo = 'D:\\projetos\\loja\\loja-front\\public\\img\\logo-loja.png'
+    expect(caminhoCurto(longo, 40)).toBe('D:\\…\\loja-front\\public\\img\\logo-loja.png')
+    expect(caminhoCurto(longo, 30)).toBe('D:\\…\\public\\img\\logo-loja.png')
+    expect(caminhoCurto('D:\\fotos\\logo.png')).toBe('D:\\fotos\\logo.png')
+    expect(pastaDe('D:/fotos/logos/logo.png')).toBe('D:\\fotos\\logos')
   })
 
   it('escreve a memória e a CPU como o Gerenciador de Tarefas', () => {

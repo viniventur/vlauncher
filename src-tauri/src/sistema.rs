@@ -39,6 +39,20 @@ pub fn abrir_pasta(app: AppHandle, pasta: String) -> Result<(), String> {
     app.opener().open_path(pasta, None::<&str>).map_err(|e| e.to_string())
 }
 
+/// Abre o Explorer na pasta do arquivo, com ele selecionado.
+#[tauri::command]
+pub fn mostrar_no_explorer(caminho: String) -> Result<(), String> {
+    if caminho.contains('"') || !std::path::Path::new(&caminho).is_file() {
+        return Err(format!("O arquivo {caminho} não existe mais."));
+    }
+    // O /select, precisa do caminho entre aspas colado na vírgula: daí o raw_arg.
+    Command::new("explorer.exe")
+        .raw_arg(format!("/select,\"{caminho}\""))
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("Não consegui abrir o Explorer: {e}"))
+}
+
 #[tauri::command]
 pub fn abrir_vscode(pasta: String) -> Result<(), String> {
     // O `code` do PATH é um .cmd: precisa do cmd para rodar.

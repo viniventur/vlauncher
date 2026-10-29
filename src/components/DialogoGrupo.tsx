@@ -22,6 +22,7 @@ export function DialogoGrupo({ id, pasta: pastaInicial, depoisImportar }: { id?:
   const [nome, setNome] = useState(grupo?.nome ?? (pastaInicial ? comMaiuscula(nomeDaPasta(pastaInicial)) : ''))
   const [pasta, setPasta] = useState(grupo?.pasta ?? pastaInicial ?? '')
   const [imagem, setImagem] = useState(grupo?.imagem)
+  const [imagemOrigem, setImagemOrigem] = useState(grupo?.imagemOrigem)
   const [ajuste, setAjuste] = useState(grupo?.ajuste ?? 'preencher')
 
   const fechar = () => {
@@ -31,7 +32,7 @@ export function DialogoGrupo({ id, pasta: pastaInicial, depoisImportar }: { id?:
 
   const salvar = () => {
     if (!nome.trim()) return
-    const dados = { nome: nome.trim(), pasta: caminhoWindows(pasta) || undefined, imagem, ajuste }
+    const dados = { nome: nome.trim(), pasta: caminhoWindows(pasta) || undefined, imagem, imagemOrigem: imagem ? imagemOrigem : undefined, ajuste }
     if (grupo) {
       editarGrupo(grupo.id, dados)
       abrirDialogo(null)
@@ -107,8 +108,17 @@ export function DialogoGrupo({ id, pasta: pastaInicial, depoisImportar }: { id?:
           <CampoImagem
             nome={nome}
             imagem={imagem}
+            origem={imagemOrigem}
             original={grupo?.imagem}
-            aoMudar={setImagem}
+            aoMudar={(nova, origem) => {
+              setImagem(nova)
+              setImagemOrigem(origem)
+            }}
+            aoAcharOrigem={(origem) => {
+              setImagemOrigem(origem)
+              if (grupo) editarGrupo(grupo.id, { imagemOrigem: origem })
+            }}
+            dicas={[pasta]}
             ajuste={ajuste}
             aoAjustar={setAjuste}
             formato="quadrado"

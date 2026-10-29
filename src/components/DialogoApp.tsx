@@ -35,6 +35,7 @@ export function DialogoApp({ id, grupoId: grupoInicial, pasta: pastaDoGrupo }: P
   const [nome, setNome] = useState(app?.nome ?? '')
   const [descricao, setDescricao] = useState(app?.descricao ?? '')
   const [imagem, setImagem] = useState(app?.imagem)
+  const [imagemOrigem, setImagemOrigem] = useState(app?.imagemOrigem)
   const [ajuste, setAjuste] = useState(app?.ajuste ?? 'preencher')
   const [variacoes, setVariacoes] = useState<Variacao[]>(app?.variacoes ?? [])
   const [padrao, setPadrao] = useState(app?.variacaoPadrao)
@@ -93,6 +94,7 @@ export function DialogoApp({ id, grupoId: grupoInicial, pasta: pastaDoGrupo }: P
       descricao: descricao.trim() || undefined,
       pasta: caminhoWindows(pasta),
       imagem,
+      imagemOrigem: imagem ? imagemOrigem : undefined,
       ajuste,
       variacoes: limpas,
       variacaoPadrao: limpas.some((v) => v.id === padrao) ? padrao : limpas[0]?.id,
@@ -191,7 +193,23 @@ export function DialogoApp({ id, grupoId: grupoInicial, pasta: pastaDoGrupo }: P
 
         <div>
           <span className="rotulo">Foto</span>
-          <CampoImagem nome={nome} imagem={imagem} original={app?.imagem} aoMudar={setImagem} ajuste={ajuste} aoAjustar={setAjuste} />
+          <CampoImagem
+            nome={nome}
+            imagem={imagem}
+            origem={imagemOrigem}
+            original={app?.imagem}
+            aoMudar={(nova, origem) => {
+              setImagem(nova)
+              setImagemOrigem(origem)
+            }}
+            aoAcharOrigem={(origem) => {
+              setImagemOrigem(origem)
+              if (app) editarApp(app.id, { imagemOrigem: origem })
+            }}
+            dicas={[pasta, grupos.find((g) => g.id === grupoId)?.pasta ?? pastaDoGrupo ?? '']}
+            ajuste={ajuste}
+            aoAjustar={setAjuste}
+          />
         </div>
 
         <div>

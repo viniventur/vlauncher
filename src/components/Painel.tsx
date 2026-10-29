@@ -82,7 +82,7 @@ function ConteudoDoPainel({ app, grupo }: { app: App; grupo: Grupo }) {
           data-alvo-imagem={`app:${app.id}`}
           onClick={() => abrirDialogo({ tipo: 'app', id: app.id })}
           className="w-44 shrink-0 self-start rounded-md"
-          title="Trocar a foto (ou arraste uma imagem para cá)"
+          title={`Trocar a foto (ou arraste uma imagem para cá)${app.imagemOrigem ? `\nVeio de ${app.imagemOrigem}` : ''}`}
         >
           <Capa nome={app.nome} imagem={app.imagem} ajuste={app.ajuste} className="aspect-[16/10] rounded-md" />
         </button>
