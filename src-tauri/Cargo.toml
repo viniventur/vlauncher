@@ -1,0 +1,33 @@
+[package]
+name = "vlauncher"
+version = "0.1.0"
+description = "Um launcher para os projetos em que você trabalha: grupos, variações, branches e worktrees"
+authors = ["Vinícius Ventura"]
+license = "MIT"
+edition = "2021"
+
+[lib]
+name = "vlauncher_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "protocol-asset", "image-png"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+regex = "1"
+# Só a WM_NCACTIVATE (src/vidro.rs); a mesma versão que as dependências do Tauri já trazem.
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

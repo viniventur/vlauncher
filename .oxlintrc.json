@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc", "jsx-a11y"],
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/only-export-components": ["warn", { "allowConstantExport": true }],
+    // App de desktop: o diálogo e a busca põem o foco no campo ao abrir, que é o esperado.
+    "jsx-a11y/no-autofocus": "off",
+    // Cliques de mouse que têm o equivalente no teclado em outro lugar: o fundo do diálogo (Esc),
+    // o cartão do app (o nome é um botão), as opções da busca (setas e Enter no campo).
+    "jsx-a11y/click-events-have-key-events": "off",
+    "jsx-a11y/no-noninteractive-element-interactions": "off"
+  },
+  "ignorePatterns": ["dist", "public", "src-tauri"]
+}

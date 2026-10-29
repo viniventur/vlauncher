@@ -1,0 +1,576 @@
+@import 'tailwindcss';
+
+/* ============================================================================
+   Tokens: os da marca Vinícius Ventura (o site viniciusventura.com.br), em OKLCH com o hex ao lado.
+   Tinta e papel fazem quase todo o trabalho; o ciano aparece pouco: o que está rodando, o estado
+   ativo, os links e o botão principal. O magenta (uso raro) marca só os erros na saída dos apps.
+   ========================================================================== */
+@theme {
+  --color-*: initial;
+
+  /* Estúdio escuro: a tinta */
+  --color-escuro-0: oklch(0.21 0.0036 48.6); /* #1a1817 fundo */
+  --color-escuro-1: oklch(0.2369 0.0036 48.6); /* #201e1d a tinta da marca: superfície */
+  --color-escuro-15: oklch(0.27 0.004 48.6); /* #282624 superfície elevada (painel, diálogo) */
+  --color-escuro-2: oklch(0.33 0.005 48.6); /* #383533 linhas */
+  --color-giz-1: oklch(0.9619 0.0011 17.2); /* #f3f2f2 o papel: texto (15,8:1) */
+  --color-giz-2: oklch(0.8 0.005 48.6); /* #c0bdbb texto secundário (9,5:1) */
+  --color-giz-3: oklch(0.68 0.006 48.6); /* #9c9795 legenda (6,1:1) */
+
+  /* Estúdio claro: o papel */
+  --color-claro-0: oklch(0.9619 0.0011 17.2); /* #f3f2f2 fundo */
+  --color-claro-1: oklch(0.925 0.003 48.6); /* #e8e6e4 superfície */
+  --color-claro-15: oklch(0.985 0.001 48.6); /* #fbfafa superfície elevada */
+  --color-claro-2: oklch(0.86 0.004 48.6); /* #d3d0cf linhas */
+  --color-branco: oklch(1 0 0);
+  --color-tinta-1: oklch(0.2369 0.0036 48.6); /* #201e1d texto (14,9:1) */
+  --color-tinta-2: oklch(0.4 0.006 48.6); /* #4b4745 texto secundário (8,2:1) */
+  --color-tinta-3: oklch(0.5 0.007 48.6); /* #676260 legenda (5,4:1) */
+
+  /* O ciano */
+  --color-ciano: oklch(0.5849 0.1135 227.5); /* #0088b0 o da marca: o chapéu do símbolo */
+  --color-ciano-claro: oklch(0.72 0.105 227.5); /* #53b1d8 destaque no escuro */
+  --color-ciano-forte: oklch(0.53 0.108 227.5); /* #00779c destaque no papel */
+  /* O magenta, raro: erro */
+  --color-magenta: oklch(0.5659 0.2285 1.9); /* #d6006c */
+  --color-magenta-claro: oklch(0.7 0.17 1.9); /* #f0609a erro legível no escuro */
+
+  --font-serifa: 'Source Serif 4 Variable', 'Source Serif 4', ui-serif, Georgia, serif;
+  /* Só na saída dos apps (é código). */
+  --font-mono: 'Cascadia Mono', 'Cascadia Code', Consolas, ui-monospace, monospace;
+
+  --text-titulo: 1.75rem;
+  --text-titulo--line-height: 1.1;
+  --text-titulo--letter-spacing: -0.02em;
+  --text-titulo--font-weight: 600;
+  --text-subtitulo: 1.375rem;
+  --text-subtitulo--line-height: 1.18;
+  --text-subtitulo--letter-spacing: -0.01em;
+  --text-subtitulo--font-weight: 600;
+  --text-corpo: 1rem;
+  --text-corpo--line-height: 1.5;
+  --text-apoio: 0.9375rem;
+  --text-apoio--line-height: 1.45;
+  --text-legenda: 0.8125rem;
+  --text-legenda--line-height: 1.4;
+  --text-codigo: 0.78125rem;
+  --text-codigo--line-height: 1.55;
+
+  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-quart: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Papéis semânticos por tema: os componentes só usam estes. */
+:root,
+[data-tema='escuro'] {
+  --fundo: var(--color-escuro-0);
+  --superficie: var(--color-escuro-1);
+  --elevada: var(--color-escuro-15);
+  --linha: var(--color-escuro-2);
+  --texto: var(--color-giz-1);
+  --texto-2: var(--color-giz-2);
+  --texto-3: var(--color-giz-3);
+  --destaque: var(--color-ciano-claro);
+  --botao: var(--color-ciano-claro);
+  --botao-realce: color-mix(in oklch, var(--color-ciano-claro), var(--color-branco) 16%);
+  --texto-botao: var(--color-tinta-1);
+  --erro: var(--color-magenta-claro);
+  /* O ponto da segunda conta do Claude Code no menu: um verde (a primeira usa o ciano). */
+  --conta-2: oklch(0.81 0.14 128);
+  --veu: color-mix(in oklch, var(--color-escuro-0) 72%, transparent);
+  --console: oklch(0.185 0.003 48.6);
+  color-scheme: dark;
+}
+
+[data-tema='claro'] {
+  --fundo: var(--color-claro-0);
+  --superficie: var(--color-claro-1);
+  --elevada: var(--color-claro-15);
+  --linha: var(--color-claro-2);
+  --texto: var(--color-tinta-1);
+  --texto-2: var(--color-tinta-2);
+  --texto-3: var(--color-tinta-3);
+  --destaque: var(--color-ciano-forte);
+  --botao: var(--color-ciano-forte);
+  --botao-realce: color-mix(in oklch, var(--color-ciano-forte), var(--color-tinta-1) 16%);
+  --texto-botao: var(--color-branco);
+  --erro: var(--color-magenta);
+  --conta-2: oklch(0.6 0.15 135);
+  --veu: color-mix(in oklch, var(--color-tinta-1) 40%, transparent);
+  /* A saída dos apps fica no escuro nos dois temas: é um terminal. */
+  --console: var(--color-escuro-1);
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-fundo: var(--fundo);
+  --color-superficie: var(--superficie);
+  --color-elevada: var(--elevada);
+  --color-linha: var(--linha);
+  --color-texto: var(--texto);
+  --color-texto-2: var(--texto-2);
+  --color-texto-3: var(--texto-3);
+  --color-destaque: var(--destaque);
+  --color-botao: var(--botao);
+  --color-botao-realce: var(--botao-realce);
+  --color-texto-botao: var(--texto-botao);
+  --color-erro: var(--erro);
+  --color-conta-2: var(--conta-2);
+  --color-veu: var(--veu);
+  --color-console: var(--console);
+}
+
+@layer base {
+  html {
+    background: var(--fundo);
+  }
+
+  body {
+    min-height: 100svh;
+    background: var(--fundo);
+    color: var(--texto);
+    font-family: var(--font-serifa);
+    font-size: var(--text-corpo);
+    line-height: var(--text-corpo--line-height);
+    font-kerning: normal;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    /* É um app, não uma página: nada de selecionar a interface sem querer ao arrastar. */
+    user-select: none;
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  input,
+  textarea,
+  [data-selecionavel] {
+    user-select: text;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  img,
+  svg {
+    display: block;
+  }
+  img {
+    max-width: 100%;
+  }
+
+  /* Ícone não encolhe: num flex apertado (o topo a 960 px), o SVG ia a largura zero e sumia (o
+     símbolo da marca, o quadrado de parar, o ícone de Grupo). E sem max-width em porcentagem: com
+     ela, o SVG conta como "comprimível" e entra com largura zero no tamanho mínimo da coluna (o
+     "Launcher" encostava na busca). */
+  svg {
+    flex-shrink: 0;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--destaque);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: color-mix(in oklch, var(--color-ciano) 34%, transparent);
+    color: inherit;
+  }
+
+  dialog {
+    color: inherit;
+  }
+
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--texto-3) 45%, transparent);
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--texto-3);
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  /* Botão principal: pílula no ciano. Um por área, no máximo. */
+  .botao {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5em;
+    min-height: 2.25rem;
+    padding: 0 1rem;
+    border-radius: 999px;
+    background: var(--botao);
+    color: var(--texto-botao);
+    font-weight: 600;
+    font-size: var(--text-apoio);
+    white-space: nowrap;
+    transition:
+      background-color 200ms var(--ease-quart),
+      transform 120ms var(--ease-quart);
+  }
+  .botao:hover {
+    background: var(--botao-realce);
+  }
+  .botao:active {
+    transform: scale(0.98);
+  }
+
+  /* Botão secundário: pílula com contorno na cor do texto; o hover preenche 8%. */
+  .botao-2 {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45em;
+    min-height: 2.25rem;
+    padding: 0 0.95rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in oklch, var(--texto) 55%, transparent);
+    color: var(--texto);
+    font-weight: 600;
+    font-size: var(--text-apoio);
+    white-space: nowrap;
+    transition:
+      background-color 200ms var(--ease-quart),
+      border-color 200ms var(--ease-quart),
+      transform 120ms var(--ease-quart);
+  }
+  .botao-2:hover {
+    background: color-mix(in oklch, var(--texto) 8%, transparent);
+    border-color: var(--texto);
+  }
+  .botao-2:active {
+    transform: scale(0.98);
+  }
+  .botao:disabled,
+  .botao-2:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .botao:disabled:hover {
+    background: var(--botao);
+  }
+  .botao-2:disabled:hover {
+    background: transparent;
+    border-color: color-mix(in oklch, var(--texto) 55%, transparent);
+  }
+  .botao-2.pequeno,
+  .botao.pequeno {
+    min-height: 1.875rem;
+    padding: 0 0.75rem;
+    font-size: var(--text-legenda);
+  }
+
+  /* Botão só com ícone. */
+  .icone-botao {
+    display: inline-grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex-shrink: 0;
+    border-radius: 999px;
+    color: var(--texto-2);
+    transition:
+      background-color 200ms var(--ease-quart),
+      color 200ms var(--ease-quart);
+  }
+  .icone-botao:hover {
+    background: color-mix(in oklch, var(--texto) 9%, transparent);
+    color: var(--texto);
+  }
+  .icone-botao.pequeno {
+    width: 1.875rem;
+    height: 1.875rem;
+  }
+
+  .campo {
+    width: 100%;
+    min-height: 2.375rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid var(--linha);
+    background: var(--fundo);
+    color: var(--texto);
+    transition: border-color 200ms var(--ease-quart);
+  }
+  .campo:hover {
+    border-color: color-mix(in oklch, var(--texto) 35%, var(--linha));
+  }
+  .campo:focus {
+    outline: none;
+    border-color: var(--destaque);
+  }
+  /* O placeholder é um exemplo: em itálico, como o descritor da marca, para não passar por valor. */
+  .campo::placeholder {
+    color: var(--texto-3);
+    font-style: italic;
+  }
+  .campo.codigo {
+    font-family: var(--font-mono);
+    font-size: var(--text-codigo);
+  }
+
+  .rotulo {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-size: var(--text-legenda);
+    font-weight: 600;
+    color: var(--texto-2);
+  }
+
+  /* O título de cada parte do painel: legenda em versalete, discreto. */
+  .secao {
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    font-variant-caps: all-small-caps;
+    font-size: 0.9375rem;
+    color: var(--texto-3);
+  }
+}
+
+/* O ponto do que está rodando: o ciano da previsão, que pulsa a cada 2,4 s como o ponto final da
+   linha do site. */
+.ponto-vivo {
+  position: relative;
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--destaque);
+}
+.ponto-vivo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--destaque);
+  animation: pulso 2.4s var(--ease-expo) infinite;
+}
+@keyframes pulso {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70%,
+  100% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+
+/* O alvo de uma imagem arrastada do Explorer. */
+[data-alvo-imagem].recebendo {
+  outline: 2px dashed var(--destaque);
+  outline-offset: 4px;
+}
+
+@keyframes entrar-painel {
+  from {
+    transform: translateX(2.5rem);
+    opacity: 0;
+  }
+}
+@keyframes entrar-baixo {
+  from {
+    transform: translateY(0.5rem);
+    opacity: 0;
+  }
+}
+@keyframes aparecer {
+  from {
+    opacity: 0;
+  }
+}
+.entra-painel {
+  animation: entrar-painel 300ms var(--ease-expo);
+}
+.entra-baixo {
+  animation: entrar-baixo 250ms var(--ease-expo);
+}
+.aparece {
+  animation: aparecer 200ms var(--ease-quart);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+  .ponto-vivo::after {
+    display: none;
+  }
+}
+
+/* ============================================================================
+   Liquid glass (data-vidro na raiz): independente do tema. O fundo ganha manchas de cor da marca (o
+   ciano e os tons quentes da tinta) e a janela deixa ver a área de trabalho. A transparência é entre
+   o app e a área de trabalho, não entre as camadas do app: é vidro translúcido só o que fica sobre o
+   fundo (o topo, as capas sem foto); o que flutua sobre o conteúdo do app (diálogos, painel, menus,
+   busca, avisos) fica opaco, com o acabamento de vidro (a borda clara e o reflexo). Translúcidos, eles
+   deixavam ver as capas de trás como um borrão atrás do formulário. Sem sombra larga junto da borda,
+   como pede a marca.
+   As manchas ficam paradas: com elas derivando, cada quadro refaz o desfoque de todo o vidro (medido:
+   ~27% de um núcleo o tempo todo, contra 0,3% paradas). Só entram com um movimento, ao ligar.
+   Sem distorção (filtro SVG de deslocamento): sobre a interface, ela arrasta as capas claras de trás
+   para dentro do vidro como um borrão. O "líquido" fica no brilho da borda e no reflexo.
+   Fora das camadas do Tailwind de propósito: vale por cima dos utilitários (bg-elevada, border-linha).
+   ========================================================================== */
+
+[data-vidro] {
+  /* A transparência da janela (0 a 1, do ajuste da gota) afina também o tom do vidro, até a metade. */
+  --k: calc(1 - var(--transparencia, 0) * 0.5);
+  --vidro-fundo: color-mix(in oklch, var(--color-escuro-1) calc(50% * var(--k)), transparent);
+  --vidro-borda: color-mix(in oklch, var(--color-giz-1) 14%, transparent);
+  --vidro-brilho: color-mix(in oklch, var(--color-giz-1) 24%, transparent);
+  --vidro-reflexo: color-mix(in oklch, var(--color-giz-1) 8%, transparent);
+  --vidro-contorno: transparent;
+  --mancha-1: oklch(0.52 0.115 227.5 / 0.62); /* o ciano da marca */
+  --mancha-2: oklch(0.45 0.09 195 / 0.55); /* verde-água */
+  --mancha-3: oklch(0.38 0.08 258 / 0.6); /* o azul fundo da tinta */
+  --mancha-4: oklch(0.44 0.06 48.6 / 0.5); /* o calor da tinta */
+}
+
+[data-vidro][data-tema='claro'] {
+  --vidro-fundo: color-mix(in oklch, var(--color-branco) calc(46% * var(--k)), transparent);
+  --vidro-borda: color-mix(in oklch, var(--color-branco) 80%, transparent);
+  --vidro-brilho: var(--color-branco);
+  --vidro-reflexo: color-mix(in oklch, var(--color-branco) 45%, transparent);
+  /* No papel, o vidro branco precisa de um fio de tinta para não sumir. */
+  --vidro-contorno: color-mix(in oklch, var(--color-tinta-1) 9%, transparent);
+  --mancha-1: oklch(0.84 0.085 227.5 / 0.75);
+  --mancha-2: oklch(0.88 0.075 185 / 0.65);
+  --mancha-3: oklch(0.86 0.05 262 / 0.6);
+  --mancha-4: oklch(0.9 0.055 72 / 0.75); /* areia */
+}
+
+/* A janela é transparente (tauri.conf.json): com o vidro, o html e o body também, e a cor-base vai
+   para o fundo líquido, que fica tão opaco quanto a transparência deixar. Em 100%, sobra só o vidro
+   das superfícies sobre o que está atrás da janela (desfocado pelo acrylic, se ligado). */
+html[data-vidro],
+html[data-vidro] body {
+  background: transparent;
+}
+
+.fundo-liquido {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--fundo);
+  opacity: calc(1 - var(--transparencia, 0));
+}
+
+.mancha {
+  position: absolute;
+  border-radius: 50%;
+  animation: surgir 1.2s var(--ease-expo) both;
+}
+.mancha-1 {
+  width: 62vmax;
+  height: 62vmax;
+  left: -18vmax;
+  top: -26vmax;
+  background: radial-gradient(closest-side, var(--mancha-1), transparent);
+}
+.mancha-2 {
+  width: 50vmax;
+  height: 50vmax;
+  right: -16vmax;
+  top: -6vmax;
+  background: radial-gradient(closest-side, var(--mancha-2), transparent);
+  animation-delay: 80ms;
+}
+.mancha-3 {
+  width: 58vmax;
+  height: 58vmax;
+  left: 18vw;
+  bottom: -34vmax;
+  background: radial-gradient(closest-side, var(--mancha-3), transparent);
+  animation-delay: 160ms;
+}
+.mancha-4 {
+  width: 38vmax;
+  height: 38vmax;
+  right: 8vw;
+  bottom: -10vmax;
+  background: radial-gradient(closest-side, var(--mancha-4), transparent);
+  animation-delay: 240ms;
+}
+@keyframes surgir {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+}
+
+/* O vidro */
+[data-vidro] .vidro {
+  background-color: var(--vidro-fundo);
+  /* O reflexo: uma luz no canto de cima, como numa gota. */
+  background-image:
+    radial-gradient(120% 70% at 8% -12%, var(--vidro-reflexo), transparent 62%),
+    linear-gradient(140deg, var(--vidro-reflexo), transparent 34%);
+  -webkit-backdrop-filter: blur(16px) saturate(175%);
+  backdrop-filter: blur(16px) saturate(175%);
+  border-color: var(--vidro-borda);
+  /* A borda de vidro: o brilho no alto e à esquerda, de onde vem a luz; um fio claro em volta. */
+  box-shadow:
+    inset 0 1px 0 0 var(--vidro-brilho),
+    inset 1px 0 0 0 color-mix(in oklch, var(--vidro-brilho) 45%, transparent),
+    inset 0 0 0 1px var(--vidro-borda),
+    0 0 0 1px var(--vidro-contorno);
+}
+/* O que flutua sobre o conteúdo do app (diálogos, painel, menus, busca, avisos): opaco, com a borda e o
+   reflexo do vidro. Sem desfoque de fundo, que aqui não teria o que mostrar. */
+[data-vidro] .vidro-opaco {
+  background-color: var(--elevada);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+/* O topo é uma faixa, não um cartão: só o fio de baixo. */
+[data-vidro] header.vidro {
+  box-shadow: inset 0 -1px 0 0 var(--vidro-borda);
+}
+
+/* O campo sobre o vidro fica vidro também, um pouco mais escuro (ou claro) que a superfície. */
+[data-vidro] .campo {
+  background: color-mix(in oklch, var(--fundo) 38%, transparent);
+  border-color: var(--vidro-borda);
+}
+
+/* O véu atrás do painel e dos diálogos escurece como no modo normal, e desfoca um pouco. */
+[data-vidro] .veu-painel,
+[data-vidro] dialog::backdrop {
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mancha {
+    animation: none;
+  }
+}

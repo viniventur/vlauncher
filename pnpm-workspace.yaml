@@ -1,0 +1,5 @@
+# pnpm só executa scripts de instalação de pacotes explicitamente liberados.
+allowBuilds:
+  esbuild: true
+minimumReleaseAgeExclude:
+  - lucide-react@1.64.0

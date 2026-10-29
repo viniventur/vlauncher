@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permissões da janela principal. Processos, git e arquivos passam pelos comandos do próprio app (src-tauri/src). O set-effects liga e desliga o acrylic do liquid glass.",
+  "windows": ["principal"],
+  "permissions": ["core:default", "core:window:allow-set-theme", "core:window:allow-set-effects", "dialog:allow-open", "dialog:allow-ask"]
+}
