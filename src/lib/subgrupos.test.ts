@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { itensDaGrade, normalizar, ordemDosApps, semOApp, subgruposValidos, sugestoesDeSubgrupos, variacaoNoSubgrupo } from './subgrupos'
-import type { App, Grupo, Subgrupo } from './tipos'
+import {
+  alvosPeloNome,
+  itensDaGrade,
+  normalizar,
+  ordemDosApps,
+  semOApp,
+  subgruposPeloNome,
+  subgruposValidos,
+  sugestoesDeSubgrupos,
+  variacaoNoSubgrupo,
+} from './subgrupos'
+import type { App, Config, Grupo, Subgrupo } from './tipos'
 
 const app = (id: string, pasta: string): App => ({
   id,
@@ -80,6 +90,40 @@ describe('as sugestões', () => {
 
   it('ignoram a pasta do grupo e os apps que já estão num subgrupo', () => {
     expect(sugestoesDeSubgrupos(grupo([loja]))).toEqual([{ nome: 'painel', apps: ['painel-api', 'painel-front'] }])
+  })
+})
+
+describe('achar o subgrupo pelo nome (o vl)', () => {
+  const painel: Subgrupo = { id: 's-painel', nome: 'Painel de Pedidos', apps: ['painel-api', 'painel-front'] }
+  const config: Config = { versao: 1, tema: 'escuro', grupos: [grupo([loja, painel])] }
+  const nomes = (consulta: string) => subgruposPeloNome(config, consulta).map((s) => s.subgrupo.nome)
+
+  it('pelo nome inteiro, sem acento nem pontuação, ou por um pedaço', () => {
+    expect(nomes('LOJA')).toEqual(['loja'])
+    expect(nomes('painel-de-pedidos')).toEqual(['Painel de Pedidos'])
+    expect(nomes('pedidos')).toEqual(['Painel de Pedidos'])
+    expect(nomes('nada')).toEqual([])
+  })
+})
+
+describe('o nome no vl: app ou subgrupo', () => {
+  const blog: Subgrupo = { id: 's-blog', nome: 'Blog', apps: ['painel-api', 'painel-front'] }
+  const config: Config = { versao: 1, tema: 'escuro', grupos: [grupo([loja, blog])] }
+  const alvos = (consulta: string) => {
+    const { apps, subgrupos } = alvosPeloNome(config, consulta)
+    return [...apps.map((a) => `app ${a.app.id}`), ...subgrupos.map((s) => `subgrupo ${s.subgrupo.nome}`)]
+  }
+
+  it('o nome igual ganha do pedaço, de app ou de subgrupo', () => {
+    expect(alvos('loja')).toEqual(['subgrupo loja'])
+    expect(alvos('loja-api')).toEqual(['app loja-api'])
+    expect(alvos('front')).toEqual(['app loja-front', 'app painel-front'])
+  })
+
+  it('o app e o subgrupo de mesmo nome se separam pela palavra na frente', () => {
+    expect(alvos('blog')).toEqual(['app blog', 'subgrupo Blog'])
+    expect(alvos('subgrupo blog')).toEqual(['subgrupo Blog'])
+    expect(alvos('app blog')).toEqual(['app blog'])
   })
 })
 

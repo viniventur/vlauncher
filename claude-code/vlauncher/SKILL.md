@@ -21,7 +21,7 @@ No PowerShell, com `&` na frente: `& "$LOCALAPPDATA/vlauncher/vl.exe" status`.
 | Para | Comando |
 | --- | --- |
 | ver o que está rodando (endereço, CPU, memória, portas) | `vl status` |
-| ver os apps cadastrados e as variações de cada um | `vl apps` |
+| ver os apps cadastrados, as variações de cada um e os subgrupos | `vl apps` |
 | rodar o app da pasta atual, na worktree em que você está | `vl rodar` |
 | rodar um app pelo nome (um pedaço basta, sem acento) | `vl rodar loja` |
 | rodar outra variação | `vl rodar loja -v preview` |
@@ -29,6 +29,7 @@ No PowerShell, com `&` na frente: `& "$LOCALAPPDATA/vlauncher/vl.exe" status`.
 | ler a saída (erros de build, do servidor) | `vl saida loja -n 200` |
 | reiniciar (depois de mudar o .env ou a configuração) | `vl reiniciar loja` |
 | parar | `vl parar loja` |
+| rodar um subgrupo inteiro (o front e a API, por exemplo) | `vl rodar <subgrupo>` |
 
 (Em todos, `vl` é o caminho completo acima.)
 
@@ -42,6 +43,11 @@ o abre na bandeja.
   suba por fora um servidor que o launcher já roda.
 - Dentro de uma worktree (`.claude/worktrees/...`), o `vl rodar` sem nome roda o app dessa
   worktree, e o launcher passa a mostrá-la como a escolhida.
+- Um subgrupo junta os apps de um sistema, em repositórios separados (o `vl apps` mostra quais). O
+  nome dele vale como o de um app: o `rodar` sobe todos, a API antes do front, cada um com a
+  variação escolhida no subgrupo, e espera os endereços; `parar`, `reiniciar` e `saida` valem para
+  todos. Com `--local`, roda na worktree da branch cada app que a tiver. Se um app e um subgrupo
+  tiverem o mesmo nome, diga qual: `vl rodar "subgrupo loja"`.
 - Para entender um erro do servidor, leia o `vl saida`, em vez de subir outro processo.
 - Pare só o que você subiu. O `vl parar --todas` derruba tudo o que o usuário está rodando: só com
   pedido explícito.

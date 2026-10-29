@@ -2,12 +2,17 @@
 // Os apps continuam na lista do grupo, e o subgrupo só aponta para eles. Aqui fica a lógica pura: a
 // grade da galeria, a ordem depois de arrastar, a variação do "rodar tudo", as sugestões e a limpeza.
 
-import { variacaoPadrao } from './apps'
-import { mesmaPasta, nomeDaPasta, pastaDe } from './texto'
+import { appDoNome, appsPeloNome, chaveDoNome, variacaoPadrao, type AppAchado } from './apps'
+import { combina, mesmaPasta, nomeDaPasta, pastaDe } from './texto'
 import type { App, Config, Grupo, Subgrupo, Variacao } from './tipos'
 
 /** Um item da grade de um grupo: um app solto, ou um subgrupo com os apps dele (na ordem do subgrupo). */
 export type ItemDaGrade = { tipo: 'app'; app: App } | { tipo: 'subgrupo'; subgrupo: Subgrupo; apps: App[] }
+
+export interface SubgrupoAchado {
+  subgrupo: Subgrupo
+  grupo: Grupo
+}
 
 type ComSubgrupos = Pick<Grupo, 'apps' | 'subgrupos'>
 
@@ -105,8 +110,45 @@ export function semOApp<G extends ComSubgrupos>(grupo: G, appId: string): G {
   return normalizar({ ...grupo, apps: grupo.apps.filter((a) => a.id !== appId) })
 }
 
+/** O nome é o do subgrupo: o id, ou o nome sem acento, espaço nem pontuação. */
+const subgrupoDoNome = (subgrupo: Subgrupo, consulta: string) => subgrupo.id === consulta || chaveDoNome(subgrupo.nome) === chaveDoNome(consulta)
+
+/**
+ * Os subgrupos que o nome indica, como os apps no `vl`: os de nome igual (sem acento, espaço nem
+ * pontuação) e, sem nenhum assim, os que têm todas as palavras do nome.
+ */
+export function subgruposPeloNome(config: Config, consulta: string): SubgrupoAchado[] {
+  const chave = chaveDoNome(consulta)
+  if (!chave) return []
+  const todos = config.grupos.flatMap((grupo) => subgruposValidos(grupo).map((subgrupo) => ({ subgrupo, grupo })))
+  const iguais = todos.filter(({ subgrupo }) => subgrupoDoNome(subgrupo, consulta))
+  if (iguais.length > 0) return iguais
+  return todos.filter(({ subgrupo, grupo }) => combina(consulta, subgrupo.nome, grupo.nome) || chaveDoNome(subgrupo.nome).includes(chave))
+}
+
+/**
+ * O que o nome pedido ao `vl` indica, apps e subgrupos. O nome igual ganha do pedaço, seja de app ou de
+ * subgrupo: "loja" é o subgrupo loja, e não os apps loja-api e loja-front. Um app e um subgrupo com o
+ * mesmo nome se separam pela palavra na frente: "app loja", "subgrupo loja".
+ */
+export function alvosPeloNome(config: Config, consulta: string): { apps: AppAchado[]; subgrupos: SubgrupoAchado[] } {
+  const apps = appsPeloNome(config, consulta)
+  const subgrupos = subgruposPeloNome(config, consulta)
+  const iguais = {
+    apps: apps.filter(({ app }) => appDoNome(app, consulta)),
+    subgrupos: subgrupos.filter(({ subgrupo }) => subgrupoDoNome(subgrupo, consulta)),
+  }
+  if (iguais.apps.length + iguais.subgrupos.length > 0) return iguais
+  const tipo = /^(app|subgrupo)\s+(.+)$/i.exec(consulta.trim())
+  if (tipo) {
+    const doTipo = alvosPeloNome(config, tipo[2]!)
+    return tipo[1]!.toLowerCase() === 'app' ? { apps: doTipo.apps, subgrupos: [] } : { apps: [], subgrupos: doTipo.subgrupos }
+  }
+  return { apps, subgrupos }
+}
+
 /** O subgrupo pelo id, com o grupo dele. */
-export function acharSubgrupo(config: Config, id: string | null | undefined): { subgrupo: Subgrupo; grupo: Grupo } | null {
+export function acharSubgrupo(config: Config, id: string | null | undefined): SubgrupoAchado | null {
   if (!id) return null
   for (const grupo of config.grupos) {
     const subgrupo = subgruposValidos(grupo).find((s) => s.id === id)

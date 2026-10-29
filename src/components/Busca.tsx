@@ -1,14 +1,16 @@
 /* oxlint-disable jsx-a11y/no-noninteractive-element-to-interactive-role, jsx-a11y/prefer-tag-over-role --
    a lista segue o padrão combobox + listbox do ARIA: o foco fica no campo e as setas escolhem. */
 // A busca (Ctrl+K no launcher, Ctrl+Alt+Espaço de qualquer lugar): digitar parte do nome e Enter
-// para rodar a variação, abrir o painel, abrir o endereço ou parar o que está rodando.
+// para rodar a variação (ou tudo de um subgrupo), abrir o painel, abrir o endereço ou parar o que está
+// rodando.
 
-import { Activity, ChevronsDownUp, ChevronsUpDown, Droplet, ExternalLink, LayoutPanelLeft, Play, Search, Square } from 'lucide-react'
+import { Activity, ChevronsDownUp, ChevronsUpDown, Droplet, ExternalLink, LayoutGrid, LayoutPanelLeft, Play, Search, Square } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api } from '../lib/api'
 import { avisarErro } from '../lib/avisos'
 import { useConfig } from '../lib/config'
-import { estaAtiva, localDoApp, useExecucoes, variacaoPadrao } from '../lib/execucoes'
+import { estaAtiva, localDoApp, pararSubgrupo, rodarSubgrupo, useExecucoes, variacaoPadrao } from '../lib/execucoes'
+import { appsDoSubgrupo, subgruposValidos, variacaoNoSubgrupo } from '../lib/subgrupos'
 import { combina, urlCurta } from '../lib/texto'
 import { useUi } from '../lib/ui'
 
@@ -22,7 +24,7 @@ interface Item {
 }
 
 export function Busca() {
-  const { abrirBusca, abrirApp, escolherAba } = useUi.getState()
+  const { abrirBusca, abrirApp, abrirSubgrupo, escolherAba } = useUi.getState()
   const grupos = useConfig((s) => s.config.grupos)
   const execucoes = useExecucoes((s) => s.execucoes)
   const vidro = useConfig((s) => Boolean(s.config.vidro))
@@ -110,8 +112,48 @@ export function Busca() {
         return r
       })
 
-    const doLauncher: Item[] = grupos.flatMap((g) =>
-      g.apps.flatMap((app) => {
+    // Os subgrupos: rodar tudo, parar o que estiver rodando e abrir o painel.
+    const subgrupos = grupos.flatMap((g) => subgruposValidos(g).map((subgrupo) => ({ subgrupo, grupo: g, membros: appsDoSubgrupo(subgrupo, g) })))
+    const pararSubgrupos: Item[] = subgrupos.flatMap(({ subgrupo, membros }) => {
+      const quantas = Object.values(execucoes).filter((e) => e.estado === 'rodando' && membros.some((a) => a.id === e.appId)).length
+      if (quantas === 0) return []
+      return [
+        {
+          chave: `parar-subgrupo-${subgrupo.id}`,
+          icone: <Square className="fill-current" />,
+          titulo: `Parar ${subgrupo.nome}`,
+          detalhe: `tudo do subgrupo · ${quantas} rodando`,
+          busca: [subgrupo.nome, 'parar', 'tudo', 'subgrupo'],
+          acao: () => pararSubgrupo(membros),
+        },
+      ]
+    })
+    const doSubgrupo = ({ subgrupo, grupo: g, membros }: (typeof subgrupos)[number]): Item[] => [
+      {
+        chave: `rodar-subgrupo-${subgrupo.id}`,
+        icone: <Play className="fill-current" />,
+        titulo: `${subgrupo.nome} · rodar tudo`,
+        detalhe: `${membros.map((a) => `${a.nome} (${variacaoNoSubgrupo(subgrupo, a)?.nome ?? 'sem variação'})`).join(' + ')} · ${g.nome}`,
+        busca: [subgrupo.nome, g.nome, 'rodar', 'tudo', 'subgrupo', ...membros.map((a) => a.nome)],
+        acao: async () => {
+          const novas = await rodarSubgrupo(subgrupo, membros)
+          if (novas[0]) escolherAba(subgrupo.id, novas[0].id)
+          abrirSubgrupo(subgrupo.id)
+        },
+      },
+      {
+        chave: `abrir-subgrupo-${subgrupo.id}`,
+        icone: <LayoutGrid />,
+        titulo: subgrupo.nome,
+        detalhe: `subgrupo · ${membros.map((a) => a.nome).join(' + ')} · ${g.nome}`,
+        busca: [subgrupo.nome, g.nome, 'subgrupo', 'painel', ...membros.map((a) => a.nome)],
+        acao: () => abrirSubgrupo(subgrupo.id),
+      },
+    ]
+
+    const doLauncher: Item[] = grupos.flatMap((g) => [
+      ...subgrupos.filter((s) => s.grupo === g).flatMap(doSubgrupo),
+      ...g.apps.flatMap((app) => {
         const padrao = variacaoPadrao(app)
         const ordenadas = padrao ? [padrao, ...app.variacoes.filter((v) => v.id !== padrao.id)] : app.variacoes
         return [
@@ -139,9 +181,11 @@ export function Busca() {
           },
         ]
       }),
-    )
-    return [...pararTodas, ...rodando, ...doLauncher, monitor, ...recolher, ...aparencia].filter((i) => combina(texto, ...i.busca)).slice(0, 60)
-  }, [grupos, execucoes, texto, vidro, abrirApp, escolherAba])
+    ])
+    return [...pararTodas, ...pararSubgrupos, ...rodando, ...doLauncher, monitor, ...recolher, ...aparencia]
+      .filter((i) => combina(texto, ...i.busca))
+      .slice(0, 60)
+  }, [grupos, execucoes, texto, vidro, abrirApp, abrirSubgrupo, escolherAba])
 
   useEffect(() => {
     lista.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' })

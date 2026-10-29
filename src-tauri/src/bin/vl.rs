@@ -21,7 +21,7 @@ const AJUDA: &str = "\
 vl: o vlauncher na linha de comando
 
   vl status                 o que está rodando: endereço, CPU, memória e portas
-  vl apps                   os apps do launcher, com as variações
+  vl apps                   os apps e os subgrupos do launcher, com as variações
   vl rodar [app]            roda a variação padrão e espera o app anunciar o endereço
   vl parar [app]            para o app (vl parar --todas: tudo o que está rodando)
   vl reiniciar [app]        para e roda de novo
@@ -30,7 +30,8 @@ vl: o vlauncher na linha de comando
   vl instalar-skill         ensina o Claude Code a usar o vl (a skill vlauncher)
 
 Sem o nome do app, vale o da pasta atual (e a worktree em que ela está). O nome pode
-ser só um pedaço, sem acento: vl rodar loja.
+ser só um pedaço, sem acento: vl rodar loja. O nome de um subgrupo vale para todos os
+apps dele: o rodar sobe cada um com a variação escolhida no subgrupo.
 
 Opções:
   -v, --variacao <nome>     outra variação (dev:all, preview...)

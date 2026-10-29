@@ -1,28 +1,18 @@
 // O que o `vl` pede ao launcher (src-tauri/src/canal.rs): o status, os apps, rodar, parar,
 // reiniciar, a saída. Só os apps e as variações que já estão aqui: o pedido traz nomes, nunca um
 // comando. Sem o nome do app, vale a pasta de onde o `vl` foi chamado (e a worktree em que ela está).
+// O nome de um subgrupo vale para todos os apps dele, cada um com a variação escolhida no subgrupo.
 // As respostas são texto para ler no terminal (é o que o Claude Code lê) e, para o --json, dados.
 
 import { api } from './api'
-import {
-  acharVariacao,
-  acharWorktree,
-  appsDaPasta,
-  appsPeloNome,
-  localDoApp,
-  pastaDoApp,
-  pastaNaWorktree,
-  Recusa,
-  todosOsApps,
-  variacaoPadrao,
-  type AppAchado,
-} from './apps'
+import { acharVariacao, acharWorktree, appsDaPasta, localDoApp, pastaDoApp, pastaNaWorktree, Recusa, todosOsApps, variacaoPadrao } from './apps'
 import { useConfig } from './config'
 import { estaAtiva, pedidoDaVariacao, useExecucoes } from './execucoes'
 import { rotuloDaWorktree } from './git'
 import { useMonitor } from './monitor'
+import { alvosPeloNome, appsDoSubgrupo, subgruposValidos, variacaoNoSubgrupo } from './subgrupos'
 import { duracao, formatarCpu, formatarMemoria, mesmaPasta } from './texto'
-import type { App, Config, Execucao, Linha, OndeEsta, PedidoDoCanal, RespostaDoCanal, Uso } from './tipos'
+import type { App, Config, Execucao, Linha, OndeEsta, PedidoDoCanal, RespostaDoCanal, Subgrupo, Uso, Variacao } from './tipos'
 import { useUi } from './ui'
 
 /** Quanto o `vl rodar` espera o app anunciar o endereço. */
@@ -30,6 +20,9 @@ const ESPERA_DO_ENDERECO_MS = 60_000
 const ESPERA_DO_PARAR_MS = 15_000
 const LINHAS_PADRAO = 60
 const MAX_LINHAS = 3000
+/** As últimas linhas da saída na resposta do rodar: as de um app, e as de cada app de um subgrupo. */
+const LINHAS_DO_INICIO = 20
+const LINHAS_DO_INICIO_NO_SUBGRUPO = 10
 const ORIGEM = 'vl'
 const PARECE_ENDERECO = /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\])/
 
@@ -101,7 +94,11 @@ function apps(): RespostaDoCanal {
           ...(rodando.length > 0 ? [`    rodando: ${rodando.join('; ')}`] : []),
         ].join('\n')
       })
-      return [g.nome, ...linhas].join('\n')
+      const subgrupos = subgruposValidos(g).map((s) => {
+        const membros = appsDoSubgrupo(s, g).map((app) => `${app.nome} (${variacaoNoSubgrupo(s, app)?.nome ?? 'sem variação'})`)
+        return `  subgrupo ${s.nome}: ${membros.join(', ')}`
+      })
+      return [g.nome, ...linhas, ...subgrupos].join('\n')
     })
     .join('\n\n')
   const dados = {
@@ -115,53 +112,24 @@ function apps(): RespostaDoCanal {
         local: localDoApp(app),
         variacoes: app.variacoes.map((v) => ({ nome: v.nome, comando: v.comando, padrao: v.id === variacaoPadrao(app)?.id })),
       })),
+      subgrupos: subgruposValidos(g).map((s) => ({
+        id: s.id,
+        nome: s.nome,
+        apps: appsDoSubgrupo(s, g).map((app) => ({ nome: app.nome, variacao: variacaoNoSubgrupo(s, app)?.nome ?? null })),
+      })),
     })),
   }
   return { ok: true, texto, dados }
 }
 
 async function rodar(pedido: PedidoDoCanal): Promise<RespostaDoCanal> {
-  const { achado, onde } = await acharApp(pedido)
+  const { achado, onde } = await achar(pedido)
+  if (achado.subgrupo) return rodarTudo(achado, pedido, onde)
   const { app } = achado
   const variacao = acharVariacao(app, pedido.args.variacao)
   const lugar = await lugarDeRodar(app, pedido.args.local, onde)
   const nomes = nomesDosApps()
-  const nome = `${app.nome} · ${variacao.nome}`
-
-  const jaRoda = Object.values(useExecucoes.getState().execucoes).find(
-    (e) => e.appId === app.id && e.variacaoId === variacao.id && estaAtiva(e) && mesmaPasta(e.pasta, lugar.pasta),
-  )
-  if (jaRoda) {
-    return {
-      ok: true,
-      texto: `${nome} já estava rodando em ${jaRoda.local}, há ${duracao(Date.now() - jaRoda.inicio)}${jaRoda.url ? `: ${jaRoda.url}` : '.'}`,
-      dados: dadosDaExecucao(jaRoda, nomes, useMonitor.getState().uso[jaRoda.id]),
-    }
-  }
-
-  // O launcher passa a mostrar esta pasta em "Onde rodar", como se a pessoa a tivesse escolhido.
-  if (!mesmaPasta(lugar.pasta, pastaDoApp(app))) {
-    useConfig.getState().editarApp(app.id, { pastaAtual: lugar.principal ? undefined : lugar.pasta, localAtual: lugar.local })
-  }
-
-  if (variacao.noTerminal) {
-    await api.abrirTerminal(lugar.pasta, variacao.comando, variacao.env)
-    return { ok: true, texto: `${nome} abriu no Windows Terminal, fora do launcher (a variação está marcada para rodar lá).` }
-  }
-
-  const avisos = await avisosDaPasta(app, lugar.pasta)
-  let execucao: Execucao
-  try {
-    execucao = await api.iniciarExecucao(pedidoDaVariacao(app, variacao, lugar, ORIGEM))
-  } catch (erro) {
-    throw new Recusa(`Não consegui rodar ${nome}: ${String(erro)}`)
-  }
-  useUi.getState().escolherAba(app.id, execucao.id)
-  if (pedido.args.esperar === false) {
-    return { ok: true, texto: `${nome} começou a rodar em ${lugar.local} (pid ${execucao.pid}).`, dados: dadosDaExecucao(execucao, nomes) }
-  }
-  const pronta = await esperarPronta(execucao.id, Boolean(variacao.url?.trim()))
-  return relatorioDoInicio(pronta ?? execucao, app, nome, avisos, nomes)
+  return terminar(await comecar(app, variacao, lugar, nomes), pedido, nomes)
 }
 
 async function parar(pedido: PedidoDoCanal): Promise<RespostaDoCanal> {
@@ -172,9 +140,14 @@ async function parar(pedido: PedidoDoCanal): Promise<RespostaDoCanal> {
     alvo = rodando
     if (alvo.length === 0) return { ok: true, texto: 'Nada rodando.' }
   } else {
-    const { achado, onde } = await acharApp(pedido)
-    alvo = execucoesDoApp(rodando, achado.app, pedido.args.variacao, onde)
-    if (alvo.length === 0) return { ok: true, texto: `${achado.app.nome} não está rodando.` }
+    const { achado, onde } = await achar(pedido)
+    if (achado.subgrupo) {
+      alvo = achado.apps.flatMap((app) => execucoesDoApp(rodando, app, undefined, onde))
+      if (alvo.length === 0) return { ok: true, texto: `Nada do subgrupo ${achado.subgrupo.nome} está rodando.` }
+    } else {
+      alvo = execucoesDoApp(rodando, achado.app, pedido.args.variacao, onde)
+      if (alvo.length === 0) return { ok: true, texto: `${achado.app.nome} não está rodando.` }
+    }
   }
   await Promise.all(alvo.map((e) => api.pararExecucao(e.id)))
   await esperar(() => alvo.every((e) => (useExecucoes.getState().execucoes[e.id]?.estado ?? 'encerrada') === 'encerrada'), ESPERA_DO_PARAR_MS)
@@ -183,56 +156,39 @@ async function parar(pedido: PedidoDoCanal): Promise<RespostaDoCanal> {
 }
 
 async function reiniciar(pedido: PedidoDoCanal): Promise<RespostaDoCanal> {
-  const { achado, onde } = await acharApp(pedido)
-  const { app } = achado
-  const recentes = Object.values(useExecucoes.getState().execucoes).sort((a, b) => b.inicio - a.inicio)
-  const candidatas = execucoesDoApp(recentes, app, pedido.args.variacao, onde)
-  const alvo = candidatas.find(estaAtiva) ?? candidatas[0]
+  const { achado, onde } = await achar(pedido)
+  if (achado.subgrupo) return rodarTudo(achado, pedido, onde, true)
+  const comeco = await recomecar(achado.app, pedido.args.variacao, onde)
   // Nunca rodou desde que o launcher abriu: reiniciar é rodar.
-  if (!alvo) return rodar(pedido)
-
-  const nomes = nomesDosApps()
-  const nome = `${app.nome} · ${alvo.rotulo}`
-  let nova: Execucao
-  try {
-    nova = await api.reiniciarExecucao(alvo.id)
-  } catch (erro) {
-    throw new Recusa(`Não consegui reiniciar ${nome}: ${String(erro)}`)
-  }
-  useUi.getState().escolherAba(app.id, nova.id)
-  if (pedido.args.esperar === false) {
-    return { ok: true, texto: `${nome} reiniciou em ${nova.local} (pid ${nova.pid}).`, dados: dadosDaExecucao(nova, nomes) }
-  }
-  const variacao = app.variacoes.find((v) => v.id === alvo.variacaoId)
-  const pronta = await esperarPronta(nova.id, Boolean(variacao?.url?.trim()))
-  return relatorioDoInicio(pronta ?? nova, app, nome, [], nomes)
+  if (!comeco) return rodar(pedido)
+  return terminar(comeco, pedido, nomesDosApps())
 }
 
 async function saida(pedido: PedidoDoCanal): Promise<RespostaDoCanal> {
-  const { achado, onde } = await acharApp(pedido)
-  const recentes = Object.values(useExecucoes.getState().execucoes).sort((a, b) => b.inicio - a.inicio)
-  const candidatas = execucoesDoApp(recentes, achado.app, pedido.args.variacao, onde)
-  const alvo = candidatas.find(estaAtiva) ?? candidatas[0]
-  if (!alvo) return { ok: false, erro: `${achado.app.nome} não rodou desde que o launcher abriu.` }
-
+  const { achado, onde } = await achar(pedido)
   const n = Math.min(Math.max(1, Math.round(pedido.args.linhas ?? LINHAS_PADRAO)), MAX_LINHAS)
-  const linhas = await ultimasLinhas(alvo.id, n)
   const nomes = nomesDosApps()
-  const cabecalho = `${titulo(alvo, nomes)}: ${situacao(alvo)}${alvo.url ? ` · ${alvo.url}` : ''}`
-  return {
-    ok: true,
-    texto: `${cabecalho}\n\n${linhas.length > 0 ? linhas.map((l) => l.texto).join('\n') : '(sem saída ainda)'}`,
-    dados: { execucao: dadosDaExecucao(alvo, nomes, useMonitor.getState().uso[alvo.id]), linhas },
-  }
+  if (!achado.subgrupo) return saidaDoApp(achado.app, pedido.args.variacao, onde, n, nomes)
+
+  const respostas = await Promise.all(achado.apps.map((app) => saidaDoApp(app, undefined, onde, n, nomes)))
+  const juntas = juntar(`Subgrupo ${achado.subgrupo.nome}: ${achado.apps.map((a) => a.nome).join(', ')}.`, achado.apps, respostas)
+  // Basta um app com saída: o que não rodou aparece com o aviso, no meio dos outros.
+  if (respostas.some((r) => r.ok)) return { ok: true, ...juntas }
+  return { ok: false, erro: `Nenhum app do subgrupo ${achado.subgrupo.nome} rodou desde que o launcher abriu.`, dados: juntas.dados }
 }
 
 async function abrir(pedido: PedidoDoCanal): Promise<RespostaDoCanal> {
   let nome = 'o vlauncher'
   if (pedido.args.app || pedido.pasta) {
     try {
-      const { achado } = await acharApp(pedido)
-      useUi.getState().abrirApp(achado.app.id)
-      nome = `o painel de ${achado.app.nome}`
+      const { achado } = await achar(pedido)
+      if (achado.subgrupo) {
+        useUi.getState().abrirSubgrupo(achado.subgrupo.id)
+        nome = `o painel do subgrupo ${achado.subgrupo.nome}`
+      } else {
+        useUi.getState().abrirApp(achado.app.id)
+        nome = `o painel de ${achado.app.nome}`
+      }
     } catch (erro) {
       // Sem o nome, a pasta era só um palpite: abre o launcher assim mesmo.
       if (pedido.args.app) throw erro
@@ -243,28 +199,51 @@ async function abrir(pedido: PedidoDoCanal): Promise<RespostaDoCanal> {
 }
 
 // ---------------------------------------------------------------------------------------------
-// O app, a worktree e a espera
+// O app ou o subgrupo, a worktree e a espera
 
-/** O app do pedido: pelo nome ou, sem nome, pela pasta de onde o `vl` foi chamado. */
-async function acharApp(pedido: PedidoDoCanal): Promise<{ achado: AppAchado; onde: OndeEsta | null }> {
+/** O que o pedido indica: um app, ou um subgrupo com os apps dele (na ordem do rodar tudo). */
+type Achado = { app: App; subgrupo?: undefined } | SubgrupoDoPedido
+interface SubgrupoDoPedido {
+  subgrupo: Subgrupo
+  apps: App[]
+  app?: undefined
+}
+
+/** O app ou o subgrupo do pedido: pelo nome ou, sem nome, o app da pasta de onde o `vl` foi chamado. */
+async function achar(pedido: PedidoDoCanal): Promise<{ achado: Achado; onde: OndeEsta | null }> {
   const config = useConfig.getState().config
   const pasta = pedido.pasta?.trim() || null
   const onde = pasta ? await api.ondeEsta(pasta).catch(() => null) : null
   const consulta = pedido.args.app?.trim()
 
-  const achados = consulta ? appsPeloNome(config, consulta) : pasta ? appsDaPasta(config, pasta, onde) : []
-  if (achados.length === 1) return { achado: achados[0]!, onde }
-  if (achados.length > 1) {
-    const nomes = achados.map(({ app }) => app.nome).join(', ')
-    throw new Recusa(consulta ? `"${consulta}" pode ser ${nomes}: diga qual.` : `Nesta pasta há ${achados.length} apps (${nomes}): diga qual.`)
+  const { apps, subgrupos } = consulta ? alvosPeloNome(config, consulta) : { apps: pasta ? appsDaPasta(config, pasta, onde) : [], subgrupos: [] }
+  const opcoes = [...apps.map(({ app }) => app.nome), ...subgrupos.map(({ subgrupo }) => `o subgrupo ${subgrupo.nome}`)]
+  if (opcoes.length > 1) {
+    const separar = apps.length > 0 && subgrupos.length > 0 ? ` (vl ${pedido.comando} "app <nome>" ou "subgrupo <nome>")` : ''
+    throw new Recusa(
+      consulta ? `"${consulta}" pode ser ${opcoes.join(', ')}: diga qual${separar}.` : `Nesta pasta há ${apps.length} apps (${opcoes.join(', ')}): diga qual.`,
+    )
   }
-  if (consulta) throw new Recusa(`Nenhum app do launcher se chama "${consulta}". ${quaisApps(config)}`)
+  if (apps[0]) return { achado: { app: apps[0].app }, onde }
+  if (subgrupos[0]) {
+    const { subgrupo, grupo } = subgrupos[0]
+    const variacao = pedido.args.variacao?.trim()
+    if (variacao) {
+      throw new Recusa(
+        `${subgrupo.nome} é um subgrupo: cada app roda a variação escolhida no painel dele. Para outra, diga o app (vl ${pedido.comando} <app> -v ${noComando(variacao)}).`,
+      )
+    }
+    return { achado: { subgrupo, apps: appsDoSubgrupo(subgrupo, grupo) }, onde }
+  }
+  if (consulta) throw new Recusa(`Nada no launcher se chama "${consulta}". ${quaisApps(config)}`)
   throw new Recusa(`Nenhum app do launcher${pasta ? ` em ${pasta}` : ''}: diga qual (vl rodar <app>). ${quaisApps(config)}`)
 }
 
 function quaisApps(config: Config) {
   const nomes = todosOsApps(config).map(({ app }) => app.nome)
-  return nomes.length > 0 ? `Os apps: ${nomes.join(', ')}.` : 'O launcher ainda não tem apps.'
+  if (nomes.length === 0) return 'O launcher ainda não tem apps.'
+  const subgrupos = config.grupos.flatMap((g) => subgruposValidos(g).map((s) => s.nome))
+  return `Os apps: ${nomes.join(', ')}.${subgrupos.length > 0 ? ` Os subgrupos: ${subgrupos.join(', ')}.` : ''}`
 }
 
 interface Lugar {
@@ -320,6 +299,132 @@ function execucoesDoApp(execucoes: Execucao[], app: App, variacao: string | unde
   return lista
 }
 
+/** A execução do app de que o pedido fala: a que está rodando ou, sem nenhuma, a mais recente. */
+function execucaoDoApp(app: App, variacao: string | undefined, onde: OndeEsta | null): Execucao | undefined {
+  const recentes = Object.values(useExecucoes.getState().execucoes).sort((a, b) => b.inicio - a.inicio)
+  const candidatas = execucoesDoApp(recentes, app, variacao, onde)
+  return candidatas.find(estaAtiva) ?? candidatas[0]
+}
+
+/**
+ * Um app que o `vl` mandou rodar: a execução que começou (falta esperar o endereço) ou, quando não há o
+ * que esperar (já rodava, abriu no Terminal), a resposta.
+ */
+type Comeco =
+  | { resposta: RespostaDoCanal }
+  | { execucao: Execucao; app: App; nome: string; avisos: string[]; enderecoFixo: boolean; reiniciou?: boolean }
+
+/** Roda a variação do app no lugar, sem esperar o endereço. */
+async function comecar(app: App, variacao: Variacao, lugar: Lugar, nomes: Map<string, string>): Promise<Comeco> {
+  const nome = `${app.nome} · ${variacao.nome}`
+  const jaRoda = Object.values(useExecucoes.getState().execucoes).find(
+    (e) => e.appId === app.id && e.variacaoId === variacao.id && estaAtiva(e) && mesmaPasta(e.pasta, lugar.pasta),
+  )
+  if (jaRoda) {
+    return {
+      resposta: {
+        ok: true,
+        texto: `${nome} já estava rodando em ${jaRoda.local}, há ${duracao(Date.now() - jaRoda.inicio)}${jaRoda.url ? `: ${jaRoda.url}` : '.'}`,
+        dados: dadosDaExecucao(jaRoda, nomes, useMonitor.getState().uso[jaRoda.id]),
+      },
+    }
+  }
+
+  // O launcher passa a mostrar esta pasta em "Onde rodar", como se a pessoa a tivesse escolhido.
+  if (!mesmaPasta(lugar.pasta, pastaDoApp(app))) {
+    useConfig.getState().editarApp(app.id, { pastaAtual: lugar.principal ? undefined : lugar.pasta, localAtual: lugar.local })
+  }
+
+  if (variacao.noTerminal) {
+    await api.abrirTerminal(lugar.pasta, variacao.comando, variacao.env)
+    return { resposta: { ok: true, texto: `${nome} abriu no Windows Terminal, fora do launcher (a variação está marcada para rodar lá).` } }
+  }
+
+  const avisos = await avisosDaPasta(app, lugar.pasta)
+  let execucao: Execucao
+  try {
+    execucao = await api.iniciarExecucao(pedidoDaVariacao(app, variacao, lugar, ORIGEM))
+  } catch (erro) {
+    throw new Recusa(`Não consegui rodar ${nome}: ${String(erro)}`)
+  }
+  useUi.getState().escolherAba(app.id, execucao.id)
+  return { execucao, app, nome, avisos, enderecoFixo: Boolean(variacao.url?.trim()) }
+}
+
+/** Reinicia a execução do app de que o pedido fala; null se ele não rodou desde que o launcher abriu. */
+async function recomecar(app: App, variacao: string | undefined, onde: OndeEsta | null): Promise<Comeco | null> {
+  const alvo = execucaoDoApp(app, variacao, onde)
+  if (!alvo) return null
+  const nome = `${app.nome} · ${alvo.rotulo}`
+  let nova: Execucao
+  try {
+    nova = await api.reiniciarExecucao(alvo.id)
+  } catch (erro) {
+    throw new Recusa(`Não consegui reiniciar ${nome}: ${String(erro)}`)
+  }
+  useUi.getState().escolherAba(app.id, nova.id)
+  const enderecoFixo = Boolean(app.variacoes.find((v) => v.id === alvo.variacaoId)?.url?.trim())
+  return { execucao: nova, app, nome, avisos: [], enderecoFixo, reiniciou: true }
+}
+
+/** Depois de começar: espera o app anunciar o endereço, ou encerrar (se o pedido não disse para não esperar), e conta como foi. */
+async function terminar(comeco: Comeco, pedido: PedidoDoCanal, nomes: Map<string, string>, linhas = LINHAS_DO_INICIO): Promise<RespostaDoCanal> {
+  if ('resposta' in comeco) return comeco.resposta
+  const { execucao, app, nome, avisos } = comeco
+  if (pedido.args.esperar === false) {
+    const feito = comeco.reiniciou ? 'reiniciou' : 'começou a rodar'
+    return { ok: true, texto: `${nome} ${feito} em ${execucao.local} (pid ${execucao.pid}).`, dados: dadosDaExecucao(execucao, nomes) }
+  }
+  const pronta = await esperarPronta(execucao.id, comeco.enderecoFixo)
+  return relatorioDoInicio(pronta ?? execucao, app, nome, avisos, nomes, linhas)
+}
+
+/**
+ * O rodar tudo do subgrupo, na ordem dele (a API antes do front): cada app com a variação escolhida no
+ * subgrupo, na worktree da pasta de onde o `vl` foi chamado (para o app daquele repositório), na do
+ * `--local` (para os apps que a têm: o front e a API na mesma branch) ou na escolhida no launcher. Depois
+ * espera todos anunciarem o endereço, juntos. Reiniciando, o app que já rodou reinicia a execução dele.
+ */
+async function rodarTudo(
+  { subgrupo, apps }: SubgrupoDoPedido,
+  pedido: PedidoDoCanal,
+  onde: OndeEsta | null,
+  reiniciando = false,
+): Promise<RespostaDoCanal> {
+  const nomes = nomesDosApps()
+  const local = pedido.args.local?.trim()
+  const doLocal = await Promise.all(apps.map((app) => (local ? lugarDeRodar(app, local, onde).catch(() => null) : null)))
+  if (local && doLocal.every((l) => !l)) {
+    throw new Recusa(`Nenhum app de ${subgrupo.nome} tem worktree de "${local}". Crie uma pelo launcher, em Onde rodar.`)
+  }
+
+  const comecos: Comeco[] = []
+  for (const [i, app] of apps.entries()) {
+    try {
+      const reiniciado = reiniciando ? await recomecar(app, undefined, onde) : null
+      if (reiniciado) {
+        comecos.push(reiniciado)
+        continue
+      }
+      // Sem variação nenhuma, a recusa de sempre (acharVariacao).
+      const variacao = variacaoNoSubgrupo(subgrupo, app) ?? acharVariacao(app)
+      comecos.push(await comecar(app, variacao, doLocal[i] ?? (await lugarDeRodar(app, undefined, onde)), nomes))
+    } catch (erro) {
+      comecos.push({ resposta: { ok: false, erro: erro instanceof Recusa ? erro.message : `Não consegui rodar ${app.nome}: ${String(erro)}` } })
+    }
+  }
+  const primeira = comecos.find((c) => 'execucao' in c)
+  if (primeira && 'execucao' in primeira) useUi.getState().escolherAba(subgrupo.id, primeira.execucao.id)
+
+  const respostas = await Promise.all(comecos.map((c) => terminar(c, pedido, nomes, LINHAS_DO_INICIO_NO_SUBGRUPO)))
+  const falhas = respostas.filter((r) => !r.ok).length
+  const cabecalho = `Subgrupo ${subgrupo.nome}: ${apps.map((a) => a.nome).join(', ')}. Para parar tudo: vl parar ${noVl(subgrupo.nome, 'subgrupo')}.`
+  const juntas = juntar(cabecalho, apps, respostas)
+  if (falhas === 0) return { ok: true, ...juntas }
+  const quais = falhas === 1 ? 'Um app' : `${falhas} apps`
+  return { ok: false, erro: `${quais} de ${subgrupo.nome} não ${falhas === 1 ? 'subiu' : 'subiram'}.`, ...juntas }
+}
+
 /** Resolve quando a condição valer (conferida a cada mudança nas execuções) ou o tempo acabar. */
 function esperar(condicao: () => boolean, ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -358,6 +463,12 @@ const nomesDosApps = () => new Map(todosOsApps(useConfig.getState().config).map(
 
 /** O nome como argumento do `vl` (entre aspas, se tiver espaço). */
 const noComando = (nome: string) => (/\s/.test(nome) ? `"${nome}"` : nome)
+
+/** O nome de um app ou de um subgrupo no `vl`: com o tipo na frente se um app e um subgrupo têm esse nome. */
+function noVl(nome: string, tipo: 'app' | 'subgrupo') {
+  const { apps, subgrupos } = alvosPeloNome(useConfig.getState().config, nome)
+  return noComando(apps.length > 0 && subgrupos.length > 0 ? `${tipo} ${nome}` : nome)
+}
 
 const titulo = (e: Execucao, nomes: Map<string, string>) => `${nomes.get(e.appId) ?? 'app'} · ${e.rotulo} · ${e.local}`
 
@@ -402,18 +513,51 @@ function dadosDaExecucao(e: Execucao, nomes: Map<string, string>, uso?: Uso) {
   }
 }
 
+/** As respostas de cada app de um subgrupo numa só: o título, e cada app no seu parágrafo. */
+function juntar(cabecalho: string, apps: App[], respostas: RespostaDoCanal[]) {
+  return {
+    texto: [cabecalho, ...respostas.map((r) => [r.erro, r.texto].filter(Boolean).join('\n'))].join('\n\n'),
+    dados: { apps: respostas.map((r, i) => ({ app: apps[i]!.nome, ok: r.ok, erro: r.erro ?? null, dados: r.dados ?? null })) },
+  }
+}
+
+async function saidaDoApp(
+  app: App,
+  variacao: string | undefined,
+  onde: OndeEsta | null,
+  n: number,
+  nomes: Map<string, string>,
+): Promise<RespostaDoCanal> {
+  const alvo = execucaoDoApp(app, variacao, onde)
+  if (!alvo) return { ok: false, erro: `${app.nome} não rodou desde que o launcher abriu.` }
+  const linhas = await ultimasLinhas(alvo.id, n)
+  const cabecalho = `${titulo(alvo, nomes)}: ${situacao(alvo)}${alvo.url ? ` · ${alvo.url}` : ''}`
+  return {
+    ok: true,
+    texto: `${cabecalho}\n\n${linhas.length > 0 ? linhas.map((l) => l.texto).join('\n') : '(sem saída ainda)'}`,
+    dados: { execucao: dadosDaExecucao(alvo, nomes, useMonitor.getState().uso[alvo.id]), linhas },
+  }
+}
+
 async function ultimasLinhas(id: string, n: number): Promise<Linha[]> {
   const linhas = await api.linhasDaExecucao(id).catch(() => useExecucoes.getState().linhas[id] ?? [])
   return linhas.slice(-n)
 }
 
-async function relatorioDoInicio(e: Execucao, app: App, nome: string, avisos: string[], nomes: Map<string, string>): Promise<RespostaDoCanal> {
-  const linhas = await ultimasLinhas(e.id, 20)
+async function relatorioDoInicio(
+  e: Execucao,
+  app: App,
+  nome: string,
+  avisos: string[],
+  nomes: Map<string, string>,
+  quantas = LINHAS_DO_INICIO,
+): Promise<RespostaDoCanal> {
+  const linhas = await ultimasLinhas(e.id, quantas)
   const dados = dadosDaExecucao(e, nomes, useMonitor.getState().uso[e.id])
   const saidaRecente = linhas.length > 0 ? `\n\nÚltimas linhas da saída:\n${linhas.map((l) => `  ${l.texto}`).join('\n')}` : ''
   const comAvisos = avisos.length > 0 ? `\n\n${avisos.map((a) => `Aviso: ${a}`).join('\n')}` : ''
   // Com mais de uma variação, a dica diz qual: sem ela, o vl saida mostraria a que estiver rodando.
-  const alvo = `${noComando(app.nome)}${app.variacoes.length > 1 ? ` -v ${noComando(e.rotulo)}` : ''}`
+  const alvo = `${noVl(app.nome, 'app')}${app.variacoes.length > 1 ? ` -v ${noComando(e.rotulo)}` : ''}`
 
   if (e.estado === 'encerrada') {
     if (!e.parada && e.codigo !== 0) {
