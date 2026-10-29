@@ -5,6 +5,7 @@ import { DialogoApp } from './components/DialogoApp'
 import { DialogoContas } from './components/DialogoContas'
 import { DialogoGrupo } from './components/DialogoGrupo'
 import { DialogoImportar } from './components/DialogoImportar'
+import { DialogoSubgrupo } from './components/DialogoSubgrupo'
 import { FundoLiquido } from './components/FundoLiquido'
 import { Galeria } from './components/Galeria'
 import { Monitor } from './components/Monitor'
@@ -106,6 +107,7 @@ export function App() {
       {dialogo?.tipo === 'app' && <DialogoApp id={dialogo.id} grupoId={dialogo.grupoId} pasta={dialogo.pasta} />}
       {dialogo?.tipo === 'importar' && <DialogoImportar grupoId={dialogo.grupoId} />}
       {dialogo?.tipo === 'contas' && <DialogoContas />}
+      {dialogo?.tipo === 'subgrupo' && <DialogoSubgrupo id={dialogo.id} grupoId={dialogo.grupoId} />}
       {buscaAberta && <Busca />}
       <Avisos />
     </>
