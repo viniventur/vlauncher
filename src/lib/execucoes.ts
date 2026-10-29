@@ -5,7 +5,9 @@ import { api } from './api'
 import { localDoApp, pastaDoApp } from './apps'
 import { avisar, avisarErro } from './avisos'
 import { useConfig } from './config'
-import type { App, Execucao, Linha, Pedido, Variacao } from './tipos'
+import { variacaoNoSubgrupo } from './subgrupos'
+import { mesmaPasta } from './texto'
+import type { App, Execucao, Linha, Pedido, Subgrupo, Variacao } from './tipos'
 
 export { localDoApp, pastaDoApp, variacaoPadrao } from './apps'
 
@@ -166,6 +168,34 @@ export const useExecucoes = create<EstadoExecucoes>()((set, get) => {
     },
   }
 })
+
+/**
+ * Roda tudo do subgrupo, na ordem dele: a variação de cada app (a escolhida no subgrupo, ou a padrão), na
+ * pasta escolhida em "Onde rodar". O que já roda com a mesma variação na mesma pasta fica como está; o
+ * app sem variação vira aviso e não impede os outros.
+ */
+export async function rodarSubgrupo(subgrupo: Subgrupo, apps: App[]) {
+  const ativas = Object.values(useExecucoes.getState().execucoes).filter(estaAtiva)
+  const novas: Execucao[] = []
+  for (const app of apps) {
+    const variacao = variacaoNoSubgrupo(subgrupo, app)
+    if (!variacao) {
+      avisar(`${app.nome} não tem variação para rodar.`, 'erro')
+      continue
+    }
+    if (ativas.some((e) => e.appId === app.id && e.variacaoId === variacao.id && mesmaPasta(e.pasta, pastaDoApp(app)))) continue
+    const execucao = await useExecucoes.getState().rodar(app, variacao)
+    if (execucao) novas.push(execucao)
+  }
+  return novas
+}
+
+/** Para tudo do subgrupo: as execuções dos apps dele, em qualquer worktree. */
+export async function pararSubgrupo(apps: App[]) {
+  const ids = new Set(apps.map((a) => a.id))
+  const { execucoes, parar } = useExecucoes.getState()
+  await Promise.all(Object.values(execucoes).filter((e) => ids.has(e.appId) && e.estado === 'rodando').map((e) => parar(e.id)))
+}
 
 /** O app saiu do launcher: o que ele tinha rodando para, e as execuções saem da lista. */
 export async function descartarDoApp(...appIds: string[]) {

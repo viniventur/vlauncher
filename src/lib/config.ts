@@ -4,7 +4,8 @@
 import { create } from 'zustand'
 import { api } from './api'
 import { novoId } from './ids'
-import type { App, Config, ContaClaude, Grupo, Tema } from './tipos'
+import { normalizar } from './subgrupos'
+import type { App, Config, ContaClaude, Grupo, Subgrupo, Tema } from './tipos'
 
 const VAZIA: Config = { versao: 1, tema: 'escuro', grupos: [] }
 
@@ -30,6 +31,15 @@ interface EstadoConfig {
   removerApp(id: string): void
   /** O resultado de um arrasto: a ordem dos apps em cada grupo. */
   reorganizarApps(ordem: Record<string, string[]>): void
+  /** Um subgrupo novo com esses apps (que saem de outro subgrupo, se estiverem num). */
+  criarSubgrupo(grupoId: string, dados: { nome: string; apps: string[] }): string
+  editarSubgrupo(id: string, dados: Partial<Omit<Subgrupo, 'id'>>): void
+  /** A variação do app que entra no "rodar tudo" do subgrupo. */
+  escolherVariacaoNoSubgrupo(id: string, appId: string, variacaoId: string): void
+  /** Desfaz o subgrupo: os apps voltam soltos para a grade. */
+  desfazerSubgrupo(id: string): void
+  /** Leva o subgrupo, com os apps, para outro grupo. */
+  moverSubgrupo(id: string, grupoId: string): void
 }
 
 export function acharApp(config: Config, id: string | null | undefined): { app: App; grupo: Grupo } | null {
@@ -47,8 +57,19 @@ function apagarImagem(nome?: string) {
 
 export const useConfig = create<EstadoConfig>()((set, get) => {
   const mudar = (f: (c: Config) => Config) => set({ config: f(get().config) })
+  // Mexeu nos apps (removeu, moveu, reordenou): os subgrupos perdem o app que saiu do grupo e se
+  // desfazem com menos de dois.
   const mudarApps = (f: (apps: App[], grupo: Grupo) => App[]) =>
-    mudar((c) => ({ ...c, grupos: c.grupos.map((g) => ({ ...g, apps: f(g.apps, g) })) }))
+    mudar((c) => ({ ...c, grupos: c.grupos.map((g) => normalizar({ ...g, apps: f(g.apps, g) })) }))
+  const grupoDoSubgrupo = (id: string) => get().config.grupos.find((g) => g.subgrupos?.some((s) => s.id === id))
+  const mudarSubgrupos = (grupoId: string, f: (subgrupos: Subgrupo[]) => Subgrupo[]) =>
+    mudar((c) => ({
+      ...c,
+      grupos: c.grupos.map((g) => (g.id === grupoId ? normalizar({ ...g, subgrupos: f(g.subgrupos ?? []) }) : g)),
+    }))
+  // Os apps que entram num subgrupo saem de qualquer outro (um app fica em um só).
+  const tirarDosOutros = (subgrupos: Subgrupo[], apps: string[], menos?: string) =>
+    subgrupos.map((s) => (s.id === menos ? s : { ...s, apps: s.apps.filter((a) => !apps.includes(a)) }))
 
   return {
     pronto: false,
@@ -121,7 +142,7 @@ export const useConfig = create<EstadoConfig>()((set, get) => {
       mudar((c) => ({
         ...c,
         grupos: c.grupos.map((g) => {
-          if (g.id === achado.grupo.id) return { ...g, apps: g.apps.filter((a) => a.id !== id) }
+          if (g.id === achado.grupo.id) return normalizar({ ...g, apps: g.apps.filter((a) => a.id !== id) })
           if (g.id === grupoId) return { ...g, apps: [...g.apps, achado.app] }
           return g
         }),
@@ -137,10 +158,54 @@ export const useConfig = create<EstadoConfig>()((set, get) => {
       const todos = new Map(get().config.grupos.flatMap((g) => g.apps.map((a) => [a.id, a] as const)))
       mudar((c) => ({
         ...c,
-        grupos: c.grupos.map((g) => ({
-          ...g,
-          apps: (ordem[g.id] ?? g.apps.map((a) => a.id)).map((id) => todos.get(id)).filter((a): a is App => Boolean(a)),
-        })),
+        grupos: c.grupos.map((g) =>
+          normalizar({
+            ...g,
+            apps: (ordem[g.id] ?? g.apps.map((a) => a.id)).map((id) => todos.get(id)).filter((a): a is App => Boolean(a)),
+          }),
+        ),
+      }))
+    },
+
+    criarSubgrupo(grupoId, dados) {
+      const id = novoId()
+      mudarSubgrupos(grupoId, (subgrupos) => [...tirarDosOutros(subgrupos, dados.apps), { id, nome: dados.nome, apps: dados.apps }])
+      return id
+    },
+
+    editarSubgrupo(id, dados) {
+      const grupo = grupoDoSubgrupo(id)
+      if (!grupo) return
+      mudarSubgrupos(grupo.id, (subgrupos) => {
+        const outros = dados.apps ? tirarDosOutros(subgrupos, dados.apps, id) : subgrupos
+        return outros.map((s) => (s.id === id ? { ...s, ...dados } : s))
+      })
+    },
+
+    escolherVariacaoNoSubgrupo(id, appId, variacaoId) {
+      const subgrupo = grupoDoSubgrupo(id)?.subgrupos?.find((s) => s.id === id)
+      if (subgrupo) get().editarSubgrupo(id, { variacoes: { ...subgrupo.variacoes, [appId]: variacaoId } })
+    },
+
+    desfazerSubgrupo(id) {
+      const grupo = grupoDoSubgrupo(id)
+      if (grupo) mudarSubgrupos(grupo.id, (subgrupos) => subgrupos.filter((s) => s.id !== id))
+    },
+
+    moverSubgrupo(id, grupoId) {
+      const origem = grupoDoSubgrupo(id)
+      const subgrupo = origem?.subgrupos?.find((s) => s.id === id)
+      if (!origem || !subgrupo || origem.id === grupoId) return
+      const levados = origem.apps.filter((a) => subgrupo.apps.includes(a.id))
+      mudar((c) => ({
+        ...c,
+        grupos: c.grupos.map((g) => {
+          if (g.id === origem.id) {
+            return normalizar({ ...g, apps: g.apps.filter((a) => !subgrupo.apps.includes(a.id)), subgrupos: g.subgrupos?.filter((s) => s.id !== id) })
+          }
+          if (g.id === grupoId) return { ...g, apps: [...g.apps, ...levados], subgrupos: [...(g.subgrupos ?? []), subgrupo] }
+          return g
+        }),
       }))
     },
   }
