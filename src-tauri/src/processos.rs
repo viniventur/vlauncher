@@ -10,8 +10,9 @@ use std::collections::{HashMap, VecDeque};
 use std::io::{BufRead, BufReader, Read};
 use std::os::windows::process::CommandExt;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError};
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -106,6 +107,74 @@ struct Registro {
     url_forte: bool,
     url_fixa: bool,
     ja_abriu: bool,
+    /// O processo ainda não saiu. Vale mesmo depois de o registro sair do mapa (reiniciar, descartar):
+    /// só se mata a árvore de um processo vivo, porque o PID de um que já saiu pode ter ido para outro.
+    vivo: Arc<AtomicBool>,
+}
+
+/// Um `docker compose up` preso ao terminal só para os contêineres com Ctrl+C, que um processo sem
+/// console não recebe: matar o processo deixaria a stack no ar. Para ele, o launcher roda antes o
+/// `docker compose ... stop` com as mesmas opções (os -f, o -p) e os mesmos serviços. Só o compose
+/// sozinho na linha (sem &&, |, ;) e preso ao terminal (sem -d nem --wait).
+pub fn parada_do_compose(comando: &str) -> Option<String> {
+    static UP: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?i)^\s*((?:docker\s+compose|docker-compose)\b.*?)\s+up(?:\s+(.*))?$").unwrap());
+    // As opções do up que levam um valor: o valor não é um serviço.
+    const COM_VALOR: [&str; 8] = ["-t", "--timeout", "--scale", "--exit-code-from", "--attach", "--no-attach", "--pull", "--wait-timeout"];
+    if comando.contains(['&', '|', ';', '<', '>', '\n']) {
+        return None;
+    }
+    let partes = UP.captures(comando)?;
+    let mut parada = format!("{} stop", partes.get(1)?.as_str().trim());
+    let mut pular = false;
+    for palavra in partes.get(2).map(|m| m.as_str()).unwrap_or_default().split_whitespace() {
+        if std::mem::take(&mut pular) {
+            continue;
+        }
+        if matches!(palavra, "-d" | "--detach" | "--wait") || palavra.starts_with("--detach=") {
+            return None;
+        }
+        if COM_VALOR.contains(&palavra) {
+            pular = true;
+        } else if !palavra.starts_with('-') {
+            parada.push(' ');
+            parada.push_str(palavra);
+        }
+    }
+    Some(parada)
+}
+
+/// Roda um comando curto na pasta, sem janela, e espera até `limite` (depois, desiste dele).
+fn rodar_e_esperar(comando: &str, pasta: &str, env: &[(String, String)], limite: Duration) {
+    let mut cmd = Command::new("cmd");
+    cmd.raw_arg(format!("/D /S /C \"{comando}\""))
+        .current_dir(pasta)
+        .envs(env.iter().filter(|(k, _)| !k.trim().is_empty()).map(|(k, v)| (k.trim(), v)))
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW);
+    let Ok(mut filho) = cmd.spawn() else { return };
+    let inicio = Instant::now();
+    while inicio.elapsed() < limite {
+        if !matches!(filho.try_wait(), Ok(None)) {
+            return;
+        }
+        thread::sleep(Duration::from_millis(200));
+    }
+    let _ = filho.kill();
+}
+
+/// Para uma execução de vez. Bloqueia (o compose leva alguns segundos para parar os contêineres): chame
+/// fora da thread da interface.
+fn parar_de_vez(pid: u32, pedido: &Pedido, vivo: &AtomicBool) {
+    if let Some(parada) = parada_do_compose(&pedido.comando) {
+        rodar_e_esperar(&parada, &pedido.pasta, &pedido.env, Duration::from_secs(90));
+    }
+    // Parados os contêineres, o `up` costuma sair sozinho: só se mata o que ainda estiver de pé.
+    if vivo.load(Ordering::SeqCst) {
+        sistema::matar_arvore(pid);
+    }
 }
 
 #[derive(Default)]
@@ -186,6 +255,7 @@ fn iniciar(app: &AppHandle, pedido: Pedido) -> Result<Execucao, String> {
         origem: pedido.origem.clone(),
     };
     let id = execucao.id.clone();
+    let vivo = Arc::new(AtomicBool::new(true));
 
     app.state::<Execucoes>().0.lock().unwrap().insert(
         id.clone(),
@@ -197,6 +267,7 @@ fn iniciar(app: &AppHandle, pedido: Pedido) -> Result<Execucao, String> {
             url_forte: false,
             url_fixa,
             ja_abriu: false,
+            vivo: vivo.clone(),
         },
     );
     emitir_estado(app, &execucao);
@@ -245,6 +316,7 @@ fn iniciar(app: &AppHandle, pedido: Pedido) -> Result<Execucao, String> {
         let app = app.clone();
         thread::spawn(move || {
             let codigo = filho.wait().ok().and_then(|s| s.code());
+            vivo.store(false, Ordering::SeqCst);
             let estado = app.state::<Execucoes>();
             let mut mapa = estado.0.lock().unwrap();
             // Reiniciada ou descartada: o registro já não é desta execução.
@@ -360,15 +432,31 @@ pub fn resumo_das_rodando(app: &AppHandle) -> Vec<String> {
         .collect()
 }
 
-/// Ao sair do launcher, nenhum servidor fica para trás ocupando porta.
+/// Ao sair do launcher, nenhum servidor fica para trás ocupando porta, nem contêiner de pé: param todas
+/// juntas, e a saída espera até 30 s pelos composes.
 pub fn encerrar_todas(app: &AppHandle) {
-    let pids: Vec<u32> = {
+    let ativas: Vec<(u32, Pedido, Arc<AtomicBool>)> = {
         let estado = app.state::<Execucoes>();
         let mapa = estado.0.lock().unwrap();
-        mapa.values().filter(|r| r.execucao.estado != Estado::Encerrada).map(|r| r.execucao.pid).collect()
+        mapa.values()
+            .filter(|r| r.execucao.estado != Estado::Encerrada)
+            .map(|r| (r.execucao.pid, r.pedido.clone(), r.vivo.clone()))
+            .collect()
     };
-    for pid in pids {
-        sistema::matar_arvore(pid);
+    let quantas = ativas.len();
+    let (tx, rx) = mpsc::channel();
+    for (pid, pedido, vivo) in ativas {
+        let tx = tx.clone();
+        thread::spawn(move || {
+            parar_de_vez(pid, &pedido, &vivo);
+            let _ = tx.send(());
+        });
+    }
+    let limite = Instant::now() + Duration::from_secs(30);
+    for _ in 0..quantas {
+        if rx.recv_timeout(limite.saturating_duration_since(Instant::now())).is_err() {
+            break;
+        }
     }
 }
 
@@ -389,7 +477,7 @@ pub fn iniciar_execucao(app: AppHandle, pedido: Pedido) -> Result<Execucao, Stri
 
 #[tauri::command]
 pub fn parar_execucao(app: AppHandle, estado: State<'_, Execucoes>, id: String) -> Result<(), String> {
-    let (pid, copia) = {
+    let (copia, pid, pedido, vivo) = {
         let mut mapa = estado.0.lock().unwrap();
         let r = mapa.get_mut(&id).ok_or("Execução não encontrada.")?;
         if r.execucao.estado == Estado::Encerrada {
@@ -397,10 +485,10 @@ pub fn parar_execucao(app: AppHandle, estado: State<'_, Execucoes>, id: String) 
         }
         r.execucao.estado = Estado::Parando;
         r.execucao.parada = true;
-        (r.execucao.pid, r.execucao.clone())
+        (r.execucao.clone(), r.execucao.pid, r.pedido.clone(), r.vivo.clone())
     };
     emitir_estado(&app, &copia);
-    thread::spawn(move || sistema::matar_arvore(pid));
+    thread::spawn(move || parar_de_vez(pid, &pedido, &vivo));
     Ok(())
 }
 
@@ -408,7 +496,7 @@ pub fn parar_execucao(app: AppHandle, estado: State<'_, Execucoes>, id: String) 
 /// pessoa", como no parar de uma por uma. Devolve quantas parou.
 #[tauri::command]
 pub fn parar_todas(app: AppHandle) -> usize {
-    let (pids, copias): (Vec<u32>, Vec<Execucao>) = {
+    let paradas: Vec<(Execucao, Pedido, Arc<AtomicBool>)> = {
         let estado = app.state::<Execucoes>();
         let mut mapa = estado.0.lock().unwrap();
         mapa.values_mut()
@@ -416,27 +504,34 @@ pub fn parar_todas(app: AppHandle) -> usize {
             .map(|r| {
                 r.execucao.estado = Estado::Parando;
                 r.execucao.parada = true;
-                (r.execucao.pid, r.execucao.clone())
+                (r.execucao.clone(), r.pedido.clone(), r.vivo.clone())
             })
-            .unzip()
+            .collect()
     };
-    for copia in &copias {
-        emitir_estado(&app, copia);
+    let quantas = paradas.len();
+    for (copia, pedido, vivo) in paradas {
+        emitir_estado(&app, &copia);
+        thread::spawn(move || parar_de_vez(copia.pid, &pedido, &vivo));
     }
-    let quantas = pids.len();
-    thread::spawn(move || pids.into_iter().for_each(sistema::matar_arvore));
     quantas
 }
 
-/// Para e roda de novo com o mesmo pedido. A execução nova entra no lugar da antiga.
+/// Para e roda de novo com o mesmo pedido. A execução nova entra no lugar da antiga. Assíncrono: um
+/// compose leva alguns segundos para parar os contêineres, e a interface não pode travar esperando.
 #[tauri::command]
-pub fn reiniciar_execucao(app: AppHandle, estado: State<'_, Execucoes>, id: String) -> Result<Execucao, String> {
-    let registro = estado.0.lock().unwrap().remove(&id).ok_or("Execução não encontrada.")?;
-    if registro.execucao.estado != Estado::Encerrada {
-        sistema::matar_arvore(registro.execucao.pid);
-    }
-    let _ = app.emit("execucao:removida", &id);
-    iniciar(&app, registro.pedido)
+pub async fn reiniciar_execucao(app: AppHandle, id: String) -> Result<Execucao, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut registro = app.state::<Execucoes>().0.lock().unwrap().remove(&id).ok_or("Execução não encontrada.")?;
+        if registro.execucao.estado != Estado::Encerrada {
+            registro.execucao.estado = Estado::Parando;
+            emitir_estado(&app, &registro.execucao);
+            parar_de_vez(registro.execucao.pid, &registro.pedido, &registro.vivo);
+        }
+        let _ = app.emit("execucao:removida", &id);
+        iniciar(&app, registro.pedido)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -444,7 +539,7 @@ pub fn descartar_execucao(app: AppHandle, estado: State<'_, Execucoes>, id: Stri
     let registro = estado.0.lock().unwrap().remove(&id);
     if let Some(r) = registro {
         if r.execucao.estado != Estado::Encerrada {
-            sistema::matar_arvore(r.execucao.pid);
+            thread::spawn(move || parar_de_vez(r.execucao.pid, &r.pedido, &r.vivo));
         }
         let _ = app.emit("execucao:removida", &id);
         crate::janela::atualizar_bandeja(&app);
@@ -476,6 +571,32 @@ pub fn limpar_linhas(estado: State<'_, Execucoes>, id: String) {
 #[cfg(test)]
 mod testes {
     use super::*;
+
+    #[test]
+    fn o_compose_preso_ao_terminal_para_os_conteineres_antes() {
+        let parada = |c: &str| parada_do_compose(c);
+        assert_eq!(parada("docker compose up --build").as_deref(), Some("docker compose stop"));
+        assert_eq!(
+            parada("docker compose -f docker-compose.dev.yml -p loja up --build").as_deref(),
+            Some("docker compose -f docker-compose.dev.yml -p loja stop")
+        );
+        // Só os serviços do up, sem tomar o valor de uma opção por serviço.
+        assert_eq!(parada("docker compose up --build -t 5 --scale api=2 db redis").as_deref(), Some("docker compose stop db redis"));
+        assert_eq!(parada("docker-compose up").as_deref(), Some("docker-compose stop"));
+        assert_eq!(parada("  DOCKER COMPOSE up").as_deref(), Some("DOCKER COMPOSE stop"));
+        // Solto do terminal, numa linha com mais coisas ou sem up: nada a fazer.
+        for c in [
+            "docker compose up -d",
+            "docker compose up --detach db",
+            "docker compose up -d --build --wait",
+            "docker compose up -d db redis && cd backend && pnpm dev",
+            "docker compose logs -f",
+            "npm run dev",
+            "docker compose -f backup.yml pull",
+        ] {
+            assert_eq!(parada(c), None, "{c}");
+        }
+    }
 
     #[test]
     fn tira_cores_e_quadros_de_progresso() {
