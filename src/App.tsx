@@ -9,6 +9,7 @@ import { FundoLiquido } from './components/FundoLiquido'
 import { Galeria } from './components/Galeria'
 import { Monitor } from './components/Monitor'
 import { Painel } from './components/Painel'
+import { PainelSubgrupo } from './components/PainelSubgrupo'
 import { Topo } from './components/Topo'
 import { Vazio } from './components/Vazio'
 import { api } from './lib/api'
@@ -98,6 +99,7 @@ export function App() {
         {temGrupos ? <Galeria /> : <Vazio />}
       </main>
       <Painel />
+      <PainelSubgrupo />
       <Monitor />
 
       {dialogo?.tipo === 'grupo' && <DialogoGrupo id={dialogo.id} pasta={dialogo.pasta} depoisImportar={dialogo.depoisImportar} />}
