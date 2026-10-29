@@ -48,6 +48,19 @@ export interface App {
   pastaWorktrees?: string
 }
 
+/**
+ * Apps do mesmo grupo que formam um sistema (o front e a API, em repositórios separados). Na galeria,
+ * uma pasta do iPhone; os apps continuam na lista do grupo, e o subgrupo só aponta para eles.
+ */
+export interface Subgrupo {
+  id: string
+  nome: string
+  /** Os ids dos apps, na ordem em que sobem no "rodar tudo" (a API antes do front). */
+  apps: string[]
+  /** A variação de cada app no "rodar tudo" (pelo id do app); sem ela, a padrão do app. */
+  variacoes?: Record<string, string>
+}
+
 export interface Grupo {
   id: string
   nome: string
@@ -59,6 +72,7 @@ export interface Grupo {
   pasta?: string
   recolhido?: boolean
   apps: App[]
+  subgrupos?: Subgrupo[]
 }
 
 export interface Config {
