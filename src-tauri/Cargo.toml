@@ -1,6 +1,6 @@
 [package]
 name = "vlauncher"
-version = "0.2.1"
+version = "0.3.0"
 description = "Um launcher para os projetos em que você trabalha: grupos, variações, branches e worktrees"
 authors = ["Vinícius Ventura"]
 license = "MIT"
