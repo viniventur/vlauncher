@@ -1,7 +1,7 @@
 {
   "name": "vlauncher",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "description": "Um launcher para os projetos em que você trabalha: grupos com foto, variações de como rodar cada app e a escolha da branch ou da worktree antes de rodar. Windows, Tauri 2.",
   "scripts": {
