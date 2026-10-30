@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  aApiPrimeiro,
   alvosPeloNome,
   itensDaGrade,
+  nomeAoJuntar,
   normalizar,
+  ordemAoJuntar,
   ordemDosApps,
   semOApp,
   subgruposPeloNome,
@@ -124,6 +127,33 @@ describe('o nome no vl: app ou subgrupo', () => {
     expect(alvos('blog')).toEqual(['app blog', 'subgrupo Blog'])
     expect(alvos('subgrupo blog')).toEqual(['subgrupo Blog'])
     expect(alvos('app blog')).toEqual(['app blog'])
+  })
+})
+
+describe('juntar arrastando', () => {
+  const nomes = grupo().apps.map((a) => a.nome)
+  const doGrupo = (...ids: string[]) => ids.map((id) => grupo().apps.find((a) => a.id === id)!)
+
+  it('a API vai antes do front', () => {
+    expect(aApiPrimeiro(doGrupo('loja-front', 'loja-api')).map((a) => a.id)).toEqual(['loja-api', 'loja-front'])
+    expect(aApiPrimeiro(doGrupo('blog', 'painel-front')).map((a) => a.id)).toEqual(['blog', 'painel-front'])
+  })
+
+  it('o nome: a pasta-mãe comum, o começo comum dos nomes ou os dois nomes', () => {
+    expect(nomeAoJuntar(doGrupo('loja-api', 'loja-front'), grupo(), nomes)).toBe('loja')
+    // A pasta-mãe é a do grupo: vale o começo comum, cortado num separador.
+    const soltos = [app('receitas-api', 'D:\\projetos\\receitas-api'), app('receitas-web', 'D:\\projetos\\receitas-web')]
+    expect(nomeAoJuntar(soltos, grupo(), nomes)).toBe('receitas')
+    // O começo comum é o nome de um app (o vl empataria): vão os dois nomes.
+    const comOMesmo = [app('receitas', 'D:\\projetos\\receitas'), app('receitas-bot', 'D:\\projetos\\receitas-bot')]
+    expect(nomeAoJuntar(comOMesmo, grupo(), ['receitas', 'receitas-bot'])).toBe('receitas + receitas-bot')
+    expect(nomeAoJuntar(doGrupo('blog', 'painel-front'), grupo(), nomes)).toBe('blog + painel-front')
+  })
+
+  it('o app vai para logo depois do alvo, saindo do grupo em que estava', () => {
+    const ordem = { g1: ['a', 'x', 'b'], g2: ['c', 'd'] }
+    expect(ordemAoJuntar(ordem, 'a', 'g1', 'b')).toEqual({ g1: ['x', 'b', 'a'], g2: ['c', 'd'] })
+    expect(ordemAoJuntar(ordem, 'd', 'g1', 'x')).toEqual({ g1: ['a', 'x', 'd', 'b'], g2: ['c'] })
   })
 })
 

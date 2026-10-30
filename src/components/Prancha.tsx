@@ -1,9 +1,10 @@
 // O app na galeria: a foto (ou a capa tipográfica) em 16:10 e, embaixo, o nome, onde roda e o botão
-// de rodar a variação padrão. Arrasta para reordenar ou para outro grupo.
+// de rodar a variação padrão. Arrasta para reordenar, para outro grupo ou, parando no meio de outro
+// app, para juntar os dois num subgrupo.
 
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ExternalLink, Play, Square } from 'lucide-react'
+import { ExternalLink, LayoutGrid, Play, Square } from 'lucide-react'
 import { api } from '../lib/api'
 import { avisarErro } from '../lib/avisos'
 import { estaAtiva, localDoApp, useExecucoes, useExecucoesDoApp, variacaoPadrao } from '../lib/execucoes'
@@ -28,9 +29,24 @@ export function Prancha({ app, grupoId }: { app: App; grupoId: string }) {
   )
 }
 
-export function PranchaVisual({ app, sobreposta = false }: { app: App; sobreposta?: boolean }) {
+/**
+ * A capa de baixo, quando o app arrastado está parado no meio dela: soltar ali junta os dois. O selo fica
+ * na base da capa, fora do caminho da prancha arrastada (que encolhe sobre o meio).
+ */
+export function SeloJuntar() {
+  return (
+    <span className="aparece absolute inset-0 flex items-end justify-center bg-[color-mix(in_oklch,var(--fundo)_30%,transparent)] pb-2.5">
+      <span className="flex items-center gap-2 rounded-full bg-[color-mix(in_oklch,var(--color-escuro-1)_82%,transparent)] px-3 py-1 text-legenda font-semibold text-giz-1 backdrop-blur-sm">
+        <LayoutGrid className="size-3.5" /> Juntar
+      </span>
+    </span>
+  )
+}
+
+export function PranchaVisual({ app, sobreposta = false, juntando = false }: { app: App; sobreposta?: boolean; juntando?: boolean }) {
   const abrirApp = useUi((s) => s.abrirApp)
   const aberto = useUi((s) => s.appAberto === app.id)
+  const juntar = useUi((s) => s.juntarCom === app.id)
   const { rodar, parar } = useExecucoes.getState()
   const ativas = useExecucoesDoApp(app.id).filter(estaAtiva)
   const principal = ativas[0]
@@ -45,11 +61,12 @@ export function PranchaVisual({ app, sobreposta = false }: { app: App; sobrepost
   return (
     <article
       data-alvo-imagem={`app:${app.id}`}
-      className={`group relative ${sobreposta ? 'rotate-[1.5deg] cursor-grabbing' : 'cursor-pointer'}`}
+      // Sobre o alvo de juntar, a prancha arrastada vira só a capa, pequena, como o ícone sobre a pasta.
+      className={`group relative ${sobreposta ? `cursor-grabbing origin-[50%_36%] transition-[scale,rotate] duration-200 ${juntando ? 'scale-[0.5] rotate-0' : 'rotate-[1.5deg]'}` : 'cursor-pointer'}`}
       onClick={() => abrirApp(app.id)}
     >
       <div
-        className={`relative overflow-hidden rounded-md transition-shadow duration-300 ${aberto ? 'ring-2 ring-destaque ring-offset-4 ring-offset-fundo' : ''} ${sobreposta ? 'shadow-[0_24px_60px_-16px_rgb(0_0_0/0.6)]' : ''}`}
+        className={`relative overflow-hidden rounded-md transition-[box-shadow,scale] duration-300 ${aberto || juntar ? 'ring-2 ring-destaque ring-offset-4 ring-offset-fundo' : ''} ${juntar ? 'scale-[0.94]' : ''} ${sobreposta ? 'shadow-[0_24px_60px_-16px_rgb(0_0_0/0.6)]' : ''}`}
       >
         <Capa
           nome={app.nome}
@@ -57,6 +74,7 @@ export function PranchaVisual({ app, sobreposta = false }: { app: App; sobrepost
           ajuste={app.ajuste}
           className="aspect-[16/10] [&>*]:transition-transform [&>*]:duration-[400ms] [&>*]:ease-[var(--ease-expo)] group-hover:[&>*]:scale-[1.03]"
         />
+        {juntar && <SeloJuntar />}
         {principal && (
           <span className="absolute top-2.5 left-2.5 flex items-center gap-2 rounded-full bg-[color-mix(in_oklch,var(--color-escuro-1)_82%,transparent)] px-2.5 py-1 text-legenda font-semibold text-giz-1 backdrop-blur-sm">
             <span className="ponto-vivo" />
@@ -65,7 +83,7 @@ export function PranchaVisual({ app, sobreposta = false }: { app: App; sobrepost
         )}
       </div>
 
-      <div className="mt-3 flex items-start gap-2">
+      <div className={`mt-3 flex items-start gap-2 transition-opacity duration-150 ${juntando ? 'opacity-0' : ''}`}>
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-semibold leading-snug transition-colors duration-200 group-hover:text-destaque">
             <button className="max-w-full truncate text-left" onClick={(e) => (e.stopPropagation(), abrirApp(app.id))}>

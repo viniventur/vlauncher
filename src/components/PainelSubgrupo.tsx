@@ -1,8 +1,8 @@
 // O painel de um subgrupo, à direita: o mosaico, o rodar e o parar tudo; cada app com o estado, a
-// variação que entra no "rodar tudo", o rodar ou o parar só dele e o "Onde rodar" (a worktree de cada um
-// é independente); embaixo, a saída de todos os apps do subgrupo.
+// variação que entra no "rodar tudo", o rodar ou o parar só dele, o tirar do subgrupo e o "Onde rodar"
+// (a worktree de cada um é independente); embaixo, a saída de todos os apps do subgrupo.
 
-import { ExternalLink, Pencil, Play, Square, X } from 'lucide-react'
+import { ExternalLink, Pencil, Play, Square, Ungroup, X } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { api } from '../lib/api'
 import { avisarErro } from '../lib/avisos'
@@ -122,9 +122,9 @@ function ConteudoDoSubgrupo({ subgrupo, grupo }: { subgrupo: Subgrupo; grupo: Gr
   )
 }
 
-/** Um app do subgrupo: o estado, a variação do "rodar tudo", rodar ou parar só ele, e onde roda. */
+/** Um app do subgrupo: o estado, a variação do "rodar tudo", rodar ou parar só ele, tirar, e onde roda. */
 function Membro({ app, subgrupo }: { app: App; subgrupo: Subgrupo }) {
-  const { abrirApp, escolherAba } = useUi.getState()
+  const { abrirApp, abrirSubgrupo, escolherAba } = useUi.getState()
   const { rodar, parar } = useExecucoes.getState()
   const escolherVariacao = useConfig((s) => s.escolherVariacaoNoSubgrupo)
   const execucoes = useExecucoesDoApp(app.id)
@@ -141,6 +141,17 @@ function Membro({ app, subgrupo }: { app: App; subgrupo: Subgrupo }) {
     : noutroLugar.length > 0
       ? `rodando noutro lugar: ${noutroLugar.map((e) => `${e.rotulo} em ${e.local}`).join(', ')}`
       : 'parado'
+
+  // O app volta solto para a grade (e continua rodando, se estiver). Com um app só, o subgrupo se desfaz.
+  const tirar = async () => {
+    const resto = subgrupo.apps.filter((id) => id !== app.id)
+    if (resto.length < 2) {
+      const aviso = `Sem ${app.nome}, o subgrupo ${subgrupo.nome} fica com um app só e se desfaz.`
+      if (!(await api.confirmar(aviso, 'Tirar do subgrupo', 'Tirar'))) return
+      abrirSubgrupo(null)
+    }
+    useConfig.getState().editarSubgrupo(subgrupo.id, { apps: resto })
+  }
 
   return (
     <li className="py-4">
@@ -195,6 +206,9 @@ function Membro({ app, subgrupo }: { app: App; subgrupo: Subgrupo }) {
             <Play className="size-3.5 fill-current" /> Rodar
           </button>
         )}
+        <button className="icone-botao pequeno -mr-1.5" onClick={tirar} title="Tirar do subgrupo" aria-label={`Tirar ${app.nome} do subgrupo`}>
+          <Ungroup className="size-4" />
+        </button>
       </div>
       <div className="mt-3 pl-[5.375rem]">
         <OndeRodar app={app} />

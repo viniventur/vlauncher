@@ -116,8 +116,8 @@ Entrou depois da primeira versão, a pedido.
   o subgrupo com os dois e abre o painel dele, como o iPhone abre a pasta nova.
 - Sobre um subgrupo, o mesmo gesto põe o app no fim dele, sem abrir nada.
 - O nome: a pasta-mãe comum aos dois (se não for a do grupo), senão o começo comum dos nomes (de três
-  letras para cima, cortado num separador), senão "Novo subgrupo". Nunca o nome de um app, para o `vl`
-  não empatar. A ordem: a API antes do front, pelo nome da pasta (como nas sugestões).
+  letras para cima, cortado num separador), senão os dois nomes, com "+". Nunca o nome de um app, para o
+  `vl` não empatar. A ordem: a API antes do front, pelo nome da pasta (como nas sugestões).
 - O app de outro grupo vem para o grupo do alvo, logo depois dele, e o subgrupo fica no lugar do alvo.
 - Reordenar muda um pouco: a prancha sob o ponteiro só sai do lugar quando ele passa para o lado de lá
   dela (o lado oposto ao de onde o app veio). Do lado de cá e no meio, ela fica parada: o app arrastado

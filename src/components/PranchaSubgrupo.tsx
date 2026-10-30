@@ -1,6 +1,6 @@
 // Um subgrupo na galeria, como uma pasta do iPhone: as capas dos apps em mosaico e, embaixo, o nome, os
 // apps e o rodar tudo (ou o parar tudo). Clicar abre o painel do subgrupo; arrastar reordena dentro do
-// grupo, levando os apps juntos.
+// grupo, levando os apps juntos; um app parado no meio dele entra nele.
 
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -11,6 +11,7 @@ import { estaAtiva, pararSubgrupo, rodarSubgrupo, useExecucoes } from '../lib/ex
 import type { App, Subgrupo } from '../lib/tipos'
 import { useUi } from '../lib/ui'
 import { Mosaico } from './Mosaico'
+import { SeloJuntar } from './Prancha'
 
 interface Props {
   subgrupo: Subgrupo
@@ -37,6 +38,7 @@ export function PranchaSubgrupo({ subgrupo, apps, grupoId }: Props & { grupoId: 
 export function PranchaSubgrupoVisual({ subgrupo, apps, sobreposta = false }: Props & { sobreposta?: boolean }) {
   const abrirSubgrupo = useUi((s) => s.abrirSubgrupo)
   const aberto = useUi((s) => s.subgrupoAberto === subgrupo.id)
+  const juntar = useUi((s) => s.juntarCom === subgrupo.id)
   const execucoes = useExecucoes((s) => s.execucoes)
   const ativas = Object.values(execucoes).filter((e) => estaAtiva(e) && apps.some((a) => a.id === e.appId))
   const rodando = apps.filter((a) => ativas.some((e) => e.appId === a.id))
@@ -51,12 +53,13 @@ export function PranchaSubgrupoVisual({ subgrupo, apps, sobreposta = false }: Pr
       aria-label={`${subgrupo.nome}: subgrupo com ${apps.map((a) => a.nome).join(' e ')}`}
     >
       <div
-        className={`relative overflow-hidden rounded-md transition-shadow duration-300 ${aberto ? 'ring-2 ring-destaque ring-offset-4 ring-offset-fundo' : ''} ${sobreposta ? 'shadow-[0_24px_60px_-16px_rgb(0_0_0/0.6)]' : ''}`}
+        className={`relative overflow-hidden rounded-md transition-[box-shadow,scale] duration-300 ${aberto || juntar ? 'ring-2 ring-destaque ring-offset-4 ring-offset-fundo' : ''} ${juntar ? 'scale-[0.94]' : ''} ${sobreposta ? 'shadow-[0_24px_60px_-16px_rgb(0_0_0/0.6)]' : ''}`}
       >
         <Mosaico
           apps={apps}
           className="rounded-md [&>div]:transition-transform [&>div]:duration-[400ms] [&>div]:ease-[var(--ease-expo)] group-hover:[&>div]:scale-[1.03]"
         />
+        {juntar && <SeloJuntar />}
         {rodando.length > 0 && (
           <span className="absolute top-2.5 left-2.5 flex items-center gap-2 rounded-full bg-[color-mix(in_oklch,var(--color-escuro-1)_82%,transparent)] px-2.5 py-1 text-legenda font-semibold text-giz-1 backdrop-blur-sm">
             <span className="ponto-vivo" />

@@ -114,8 +114,12 @@ na mesma subpasta de cada worktree. As pastas em que o app está rodando ganham 
 O front e a API costumam morar em repositórios separados. Junte os dois num **subgrupo**: na galeria,
 eles viram um cartão só, como uma pasta do iPhone, e o painel dele mostra cada app com a sua worktree e
 a saída de todos. **Rodar tudo** sobe cada um com a variação escolhida, a API antes do front, cada um na
-sua pasta: a loja na worktree da feature, a API na principal. Crie em "Novo subgrupo", no menu do grupo;
-o vlauncher sugere os repositórios que moram na mesma pasta.
+sua pasta: a loja na worktree da feature, a API na principal.
+
+Junte como no iPhone: arraste um app sobre outro e pare um instante, até a capa de baixo mostrar
+"Juntar". Um terceiro app entra no subgrupo do mesmo jeito, e "Tirar do subgrupo", no painel, devolve um
+app à grade. Também dá para criar em "Novo subgrupo", no menu do grupo, que sugere os repositórios que
+moram na mesma pasta.
 
 ![O painel de um subgrupo: a API e a loja rodando, cada uma na sua worktree, com a saída das duas](docs/subgrupo.webp)
 

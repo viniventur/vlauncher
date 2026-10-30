@@ -4,7 +4,8 @@
 import { create } from 'zustand'
 import { api } from './api'
 import { novoId } from './ids'
-import { normalizar } from './subgrupos'
+import { todosOsApps } from './apps'
+import { aApiPrimeiro, acharSubgrupo, nomeAoJuntar, normalizar, ordemAoJuntar } from './subgrupos'
 import type { App, Config, ContaClaude, Grupo, Subgrupo, Tema } from './tipos'
 
 const VAZIA: Config = { versao: 1, tema: 'escuro', grupos: [] }
@@ -40,6 +41,12 @@ interface EstadoConfig {
   desfazerSubgrupo(id: string): void
   /** Leva o subgrupo, com os apps, para outro grupo. */
   moverSubgrupo(id: string, grupoId: string): void
+  /**
+   * Juntar arrastando, como no iPhone: o app vai para logo depois do alvo, no grupo dele (a `ordem` é a
+   * do arrasto). Sobre um app, nasce um subgrupo com os dois; sobre um subgrupo, o app entra no fim dele.
+   * Devolve o id do subgrupo novo.
+   */
+  juntar(appId: string, alvoId: string, ordem: Record<string, string[]>): string | null
 }
 
 export function acharApp(config: Config, id: string | null | undefined): { app: App; grupo: Grupo } | null {
@@ -207,6 +214,27 @@ export const useConfig = create<EstadoConfig>()((set, get) => {
           return g
         }),
       }))
+    },
+
+    juntar(appId, alvoId, ordem) {
+      const config = get().config
+      if (appId === alvoId || !acharApp(config, appId)) return null
+      const noSubgrupo = acharSubgrupo(config, alvoId)
+      if (noSubgrupo) {
+        const { subgrupo, grupo } = noSubgrupo
+        // Entra depois do último app do subgrupo: o subgrupo continua no mesmo lugar da grade.
+        const ultimo = (ordem[grupo.id] ?? []).findLast((id) => subgrupo.apps.includes(id)) ?? subgrupo.apps.at(-1)!
+        get().reorganizarApps(ordemAoJuntar(ordem, appId, grupo.id, ultimo))
+        get().editarSubgrupo(subgrupo.id, { apps: [...subgrupo.apps, appId] })
+        return null
+      }
+      const alvo = acharApp(config, alvoId)
+      if (!alvo) return null
+      get().reorganizarApps(ordemAoJuntar(ordem, appId, alvo.grupo.id, alvoId))
+      const app = acharApp(get().config, appId)!.app
+      const apps = aApiPrimeiro([alvo.app, app])
+      const nome = nomeAoJuntar(apps, alvo.grupo, todosOsApps(config).map((a) => a.app.nome))
+      return get().criarSubgrupo(alvo.grupo.id, { nome, apps: apps.map((a) => a.id) })
     },
   }
 })

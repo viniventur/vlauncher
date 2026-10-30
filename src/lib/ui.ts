@@ -19,12 +19,15 @@ interface EstadoUi {
   buscaAberta: boolean
   /** A aba de execução escolhida em cada app (e em cada subgrupo, pelo id dele). */
   abaDoApp: Record<string, string>
+  /** Arrastando um app: a prancha (app ou subgrupo) com que ele junta se for solto agora. */
+  juntarCom: string | null
   abrirApp(id: string | null): void
   abrirSubgrupo(id: string | null): void
   abrirMonitor(aberto: boolean): void
   abrirDialogo(d: Dialogo | null): void
   abrirBusca(aberta: boolean): void
   escolherAba(appId: string, execucaoId: string): void
+  marcarJuntar(id: string | null): void
 }
 
 export const useUi = create<EstadoUi>()((set) => ({
@@ -34,6 +37,7 @@ export const useUi = create<EstadoUi>()((set) => ({
   dialogo: null,
   buscaAberta: false,
   abaDoApp: {},
+  juntarCom: null,
   abrirApp: (appAberto) => set(appAberto ? { appAberto, subgrupoAberto: null, monitorAberto: false } : { appAberto }),
   abrirSubgrupo: (subgrupoAberto) =>
     set(subgrupoAberto ? { subgrupoAberto, appAberto: null, monitorAberto: false } : { subgrupoAberto }),
@@ -41,4 +45,5 @@ export const useUi = create<EstadoUi>()((set) => ({
   abrirDialogo: (dialogo) => set({ dialogo }),
   abrirBusca: (buscaAberta) => set({ buscaAberta }),
   escolherAba: (appId, execucaoId) => set((s) => ({ abaDoApp: { ...s.abaDoApp, [appId]: execucaoId } })),
+  marcarJuntar: (juntarCom) => set({ juntarCom }),
 }))
