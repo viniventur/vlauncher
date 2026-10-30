@@ -107,6 +107,26 @@ no ar, cada uma com a sua aba, a sua saída e a sua linha no monitor. Entra: na 
 as worktrees que estão rodando ganham o ponto ciano e o nome da variação. As portas continuam por conta
 de cada app (a variação com outra porta, como hoje).
 
+## Juntar arrastando (como no iPhone)
+
+Entrou depois da primeira versão, a pedido.
+
+- Arrastar um app e parar sobre o meio da capa de outro (a faixa do meio, na altura da capa): depois de
+  400 ms parado ali, a capa de baixo encolhe um pouco e ganha o contorno ciano com "Juntar". Soltar cria
+  o subgrupo com os dois e abre o painel dele, como o iPhone abre a pasta nova.
+- Sobre um subgrupo, o mesmo gesto põe o app no fim dele, sem abrir nada.
+- O nome: a pasta-mãe comum aos dois (se não for a do grupo), senão o começo comum dos nomes (de três
+  letras para cima, cortado num separador), senão "Novo subgrupo". Nunca o nome de um app, para o `vl`
+  não empatar. A ordem: a API antes do front, pelo nome da pasta (como nas sugestões).
+- O app de outro grupo vem para o grupo do alvo, logo depois dele, e o subgrupo fica no lugar do alvo.
+- Reordenar muda um pouco: a prancha sob o ponteiro só sai do lugar quando ele passa para o lado de lá
+  dela (o lado oposto ao de onde o app veio). Do lado de cá e no meio, ela fica parada: o app arrastado
+  entra antes dela. Assim, parar no meio junta e passar reordena, sem as pranchas pularem. As faixas são
+  medidas no lugar original de cada prancha (o dnd-kit mede sem o deslocamento do arrasto).
+- Um subgrupo arrastado não junta: não há subgrupo dentro de subgrupo.
+- Tirar: no painel do subgrupo, cada app ganha o botão "Tirar do subgrupo". Tirar o penúltimo desfaz o
+  subgrupo, e isso pede confirmação.
+
 ## Casos de borda
 
 - O app removido ou levado para outro grupo sai do subgrupo; com menos de dois apps, o subgrupo se
@@ -126,6 +146,6 @@ de cada app (a variação com outra porta, como hoje).
 
 ## Fora do escopo
 
-- Arrastar um app para cima de outro para criar o subgrupo (como no iPhone): fica para depois.
+- Arrastar um app do painel do subgrupo de volta para a galeria (tirar do subgrupo arrastando).
 - Subgrupo dentro de subgrupo.
 - Esperar a API ficar pronta antes do front, e portas automáticas por worktree.

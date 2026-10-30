@@ -143,3 +143,17 @@ botão, o mesmo para a escolhida. Commit: `feat: o Onde rodar mostra as worktree
   app numa worktree, parar tudo, `vl rodar <subgrupo>`, as capturas nos dois temas.
 - README: a seção dos subgrupos e as capturas novas.
 - Versão 0.3.0 e o instalador. Commit: `chore: versão 0.3.0`.
+
+### 10. Juntar arrastando
+
+- `src/lib/arrasto.ts`: `zonaNaPrancha(rect, ponto, vemDeAntes)` devolve `perto`, `centro` ou `longe`,
+  com testes. `subgrupos.ts`: `aApiPrimeiro(apps)`, `nomeAoJuntar(apps, grupo, nomesDosApps)` e
+  `ordemAoJuntar(ordem, appId, grupoId, depoisDe)`, com testes.
+- `config.ts`: `juntar(appId, alvoId, ordem)` (cria o subgrupo, ou põe o app no subgrupo alvo, e leva o
+  app para o grupo do alvo); devolve o id do subgrupo novo. `ui.ts`: `juntarCom` (o alvo em destaque).
+- `Galeria.tsx`: na colisão de um app sobre outro item da grade, as faixas; no meio, o candidato a
+  juntar; 400 ms parado nele viram o destaque; soltar com o destaque junta.
+- `Prancha.tsx` e `PranchaSubgrupo.tsx`: o destaque de "Juntar"; a prancha arrastada encolhe sobre o
+  alvo. `PainelSubgrupo.tsx`: o botão "Tirar do subgrupo".
+- De ponta a ponta: juntar dois apps, pôr um terceiro no subgrupo, reordenar sem juntar, tirar pelo
+  painel. README: o juntar arrastando. Commit: `feat: juntar os apps arrastando, como no iPhone`.
